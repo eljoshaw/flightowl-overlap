@@ -84,25 +84,27 @@ function Bar({ airport, sunrise, sunset }) {
 
 
 export default function Page() {
-  const [from, setFrom] = useState("DXB");
-  const [to, setTo] = useState("SYD");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10)); // default to today
+
 
   async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch(`/api/overlap?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+      const res = await fetch(
+        `/api/overlap?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${encodeURIComponent(date)}`
+      );
       const json = await res.json();
       setData(json);
-    } catch (err) {
-      console.error(err);
-      setData({ error: "Failed to fetch" });
     } finally {
       setLoading(false);
     }
   }
+
 
   // Build per-airport day/night bars from todayUTC sunrise/sunset
   const daySegs = (sunrise, sunset) => [{ startUTC: sunrise, endUTC: sunset }];
@@ -115,29 +117,39 @@ export default function Page() {
     <main style={{ maxWidth: 900, margin: "40px auto", padding: "0 20px" }}>
       <h1 style={{ fontSize: 28, marginBottom: 12 }}>FlightOwl • Daylight Overlap</h1>
 
-      <form onSubmit={handleSubmit} style={{ marginBottom: 18 }}>
-        <label style={{ marginRight: 10 }}>
-          From:{" "}
-          <input
-            value={from}
-            onChange={(e) => setFrom(e.target.value.toUpperCase())}
-            placeholder="DXB"
-            maxLength={3}
-            required
-          />
-        </label>
-        <label style={{ marginRight: 10 }}>
-          To:{" "}
-          <input
-            value={to}
-            onChange={(e) => setTo(e.target.value.toUpperCase())}
-            placeholder="SYD"
-            maxLength={3}
-            required
-          />
-        </label>
-        <button type="submit" disabled={loading}>{loading ? "Checking..." : "Check"}</button>
-      </form>
+        <form onSubmit={handleSubmit} style={{ marginBottom: 18 }}>
+          <label style={{ marginRight: 10 }}>
+            From:{" "}
+            <input
+              value={from}
+              onChange={(e) => setFrom(e.target.value.toUpperCase())}
+              placeholder="DXB"
+              maxLength={3}
+              required
+            />
+          </label>
+          <label style={{ marginRight: 10 }}>
+            To:{" "}
+            <input
+              value={to}
+              onChange={(e) => setTo(e.target.value.toUpperCase())}
+              placeholder="SYD"
+              maxLength={3}
+              required
+            />
+          </label>
+          <label style={{ marginRight: 10 }}>
+            Date (UTC):{" "}
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+            />
+          </label>
+          <button type="submit" disabled={loading}>{loading ? "Checking..." : "Check"}</button>
+        </form>
+
 
       {!data && <p style={{ color: "#666" }}>Enter two IATA codes (e.g., DXB and SYD) and press “Check”.</p>}
       {data?.error && <p style={{ color: "crimson" }}>{String(data.error)}</p>}
