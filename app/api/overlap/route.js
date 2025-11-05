@@ -2,153 +2,219 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { calculateSunTimes } from '../../../utils/sunCalc';
 
-// Supabase client (env vars set in Vercel → Settings → Environment Variables)
+// --- Supabase client (env vars set in Vercel) ---
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-// Find airport by IATA (case-insensitive)
+// ---------- small helpers ----------
+function toMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+function minutesToHHMM(mins) {
+  const m = ((mins % 1440) + 1440) % 1440; // wrap to 0..1439
+  const hh = String(Math.floor(m / 60)).padStart(2, '0');
+  const mm = String(m % 60).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+function clampToDayWindow(start, end) {
+  // returns [clampedStart, clampedEnd] intersected with [0, 1440)
+  const s = Math.max(start, 0);
+  const e = Math.min(end, 1440);
+  return e > s ? [s, e] : null;
+}
+
+// ---------- build intervals for ONE day (UTC minutes 0..1440) ----------
+// Returns { daylight: Array<[start,end]>, nighttime: Array<[start,end]> }
+function buildIntervalsForOneDay(sunriseMin, sunsetMin) {
+  // Handle polar cases if your sunCalc returns strings like "No sunrise"/"No sunset"
+  if (
+    typeof sunriseMin !== 'number' ||
+    typeof sunsetMin !== 'number' ||
+    Number.isNaN(sunriseMin) ||
+    Number.isNaN(sunsetMin)
+  ) {
+    return { daylight: [], nighttime: [] };
+  }
+
+  // Case A: daylight fully within same UTC day
+  if (sunsetMin > sunriseMin) {
+    return {
+      daylight: [[sunriseMin, sunsetMin]],
+      nighttime: [
+        [0, sunriseMin],        // night before sunrise
+        [sunsetMin, 1440]       // night after sunset
+      ]
+    };
+  }
+
+  // Case B: daylight wraps past midnight (e.g., sunrise 18:51 → sunset 08:27 next day)
+  // Split daylight into two chunks; nighttime is the contiguous middle
+  return {
+    daylight: [
+      [sunriseMin, 1440],
+      [0, sunsetMin]
+    ],
+    nighttime: [[sunsetMin, sunriseMin]]
+  };
+}
+
+// ---------- build 3-day continuous intervals (yesterday, today, tomorrow) ----------
+// Returns { daylight: Array<[start,end]>, nighttime: Array<[start,end]> } on a continuous timeline
+function buildContinuousIntervals(sunResultsYesterday, sunResultsToday, sunResultsTomorrow) {
+  const days = [sunResultsYesterday, sunResultsToday, sunResultsTomorrow];
+  const offsets = [-1440, 0, 1440];
+
+  const out = { daylight: [], nighttime: [] };
+
+  days.forEach((res, i) => {
+    if (!res || typeof res.sunriseUTC !== 'string' || typeof res.sunsetUTC !== 'string') return;
+    const sunrise = toMinutes(res.sunriseUTC);
+    const sunset  = toMinutes(res.sunsetUTC);
+
+    const base = buildIntervalsForOneDay(sunrise, sunset);
+    const off = offsets[i];
+
+    base.daylight.forEach(([s, e]) => out.daylight.push([s + off, e + off]));
+    base.nighttime.forEach(([s, e]) => out.nighttime.push([s + off, e + off]));
+  });
+
+  return out;
+}
+
+// ---------- find ALL overlap segments that touch the requested day ----------
+// Intersect with [0, 1440) so you see anything that spills in from yesterday/tomorrow.
+function findOverlapSegments(intervalsA, intervalsB) {
+  const rawSegments = [];
+
+  for (const [aStart, aEnd] of intervalsA) {
+    for (const [bStart, bEnd] of intervalsB) {
+      const start = Math.max(aStart, bStart);
+      const end   = Math.min(aEnd, bEnd);
+      if (end > start) rawSegments.push([start, end]);
+    }
+  }
+
+  // Intersect with the requested day window [0, 1440)
+  const clipped = [];
+  for (const [s, e] of rawSegments) {
+    const clippedSeg = clampToDayWindow(s, e);
+    if (clippedSeg) clipped.push(clippedSeg);
+  }
+
+  if (clipped.length === 0) {
+    return { overlap: false, totalMinutes: 0, segments: [] };
+  }
+
+  // Merge overlapping/adjacent segments inside the day window
+  clipped.sort((x, y) => x[0] - y[0]);
+  const merged = [];
+  let cur = clipped[0].slice();
+  for (let i = 1; i < clipped.length; i++) {
+    const [s, e] = clipped[i];
+    if (s <= cur[1]) {
+      cur[1] = Math.max(cur[1], e); // extend
+    } else {
+      merged.push(cur);
+      cur = [s, e];
+    }
+  }
+  merged.push(cur);
+
+  const total = merged.reduce((sum, [s, e]) => sum + (e - s), 0);
+
+  return {
+    overlap: true,
+    totalMinutes: total,
+    segments: merged.map(([s, e]) => ({
+      startUTC: minutesToHHMM(s),
+      endUTC:   minutesToHHMM(e),
+      minutes:  e - s
+    }))
+  };
+}
+
+// ---------- fetch airport by IATA ----------
 async function getAirportByIATA(iata) {
   const code = String(iata || '').toUpperCase();
   const { data, error } = await supabase
     .from('airports')
-    .select('name, country, latitude, longitude, timezone')
+    .select('name, country, latitude, longitude, timezone, iata')
     .eq('iata', code)
     .single();
   if (error || !data) throw new Error(`Airport not found for ${code}`);
   return data;
 }
 
-// Compute overlap between two daylight windows (same-day basic version)
-// --- New Improved Overlap Logic (handles cross-midnight daylight) ---
-function toMinutes(t) {
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + m;
-}
-
-function minutesToHHMM(mins) {
-  const h = Math.floor(mins / 60) % 24;
-  const m = mins % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
-
-// Takes an array of intervals [ [start,end], [start,end], ... ]
-// Returns total overlap in minutes between two sets of intervals
-function findOverlap(intervalsA, intervalsB) {
-  const overlaps = [];
-
-  for (const [aStart, aEnd] of intervalsA) {
-    for (const [bStart, bEnd] of intervalsB) {
-      // Normalize all intervals within 24h range
-      const start = Math.max(aStart % 1440, bStart % 1440);
-      const end = Math.min(aEnd % 1440, bEnd % 1440);
-
-      // Only store overlaps that make physical sense (not 25h+ spans)
-      if (end > start && end - start < 1440) {
-        overlaps.push([start, end]);
-      }
-    }
-  }
-
-  if (overlaps.length === 0) {
-    return { overlap: false };
-  }
-
-  // Choose the largest single overlap period
-  const [overlapStart, overlapEnd] = overlaps.reduce((max, cur) =>
-    cur[1] - cur[0] > max[1] - max[0] ? cur : max
-  );
-
-  const durationMin = overlapEnd - overlapStart;
-
-  return {
-    overlap: true,
-    overlapUTC: `${minutesToHHMM(overlapStart)} → ${minutesToHHMM(overlapEnd)}`,
-    overlapDuration: `${Math.floor(durationMin / 60)}h ${durationMin % 60}m`,
-  };
-}
-
-
-// Build 48-hour daylight intervals to handle overnight cases
-function buildDaylightIntervals(array) {
-  // Each element: { sunriseUTC: "HH:MM", sunsetUTC: "HH:MM" }
-  const intervals = [];
-
-  array.forEach(day => {
-    const [sunriseH, sunriseM] = day.sunriseUTC.split(':').map(Number);
-    const [sunsetH, sunsetM] = day.sunsetUTC.split(':').map(Number);
-
-    const sunriseMin = sunriseH * 60 + sunriseM;
-    const sunsetMin = sunsetH * 60 + sunsetM;
-
-    // Handle days where sunset is after midnight (e.g. SYD)
-    if (sunsetMin < sunriseMin) {
-      // Split into two intervals: from sunrise → 1440, then 0 → sunset
-      intervals.push([sunriseMin, 1440]);
-      intervals.push([0, sunsetMin]);
-    } else {
-      intervals.push([sunriseMin, sunsetMin]);
-    }
-  });
-
-  return intervals;
-}
-
-
+// ---------- API: GET /api/overlap?from=DXB&to=SYD&date=YYYY-MM-DD ----------
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
-    const from = searchParams.get('from');
-    const to   = searchParams.get('to');
-    const date = searchParams.get('date'); // YYYY-MM-DD
+    const fromCode = (searchParams.get('from') || '').toUpperCase();
+    const toCode   = (searchParams.get('to') || '').toUpperCase();
+    const dateStr  = searchParams.get('date'); // optional in this JS version; you can add it later
 
-    if (!from || !to || !date) {
-      return NextResponse.json({ error: 'Use ?from=DXB&to=SYD&date=2025-11-06' }, { status: 400 });
+    if (!fromCode || !toCode) {
+      return NextResponse.json(
+        { error: 'Use ?from=DXB&to=SYD&date=YYYY-MM-DD (date optional for now)' },
+        { status: 400 }
+      );
     }
 
-    // 1) Lookup airports
-    const [A, B] = await Promise.all([ getAirportByIATA(from), getAirportByIATA(to) ]);
+    // Dates: yesterday, today, tomorrow — base on provided date or "today" UTC
+    const d0 = dateStr ? new Date(dateStr + 'T00:00:00Z') : new Date(new Date().toISOString().slice(0,10) + 'T00:00:00Z');
+    const dM1 = new Date(d0.getTime() - 86400000);
+    const dP1 = new Date(d0.getTime() + 86400000);
 
-    // 2) Compute sunrise/sunset (UTC) for that date ±1 day
-    const d = new Date(date + 'T00:00:00Z');
-    const dayBefore = new Date(d.getTime() - 86400000);
-    const dayAfter = new Date(d.getTime() + 86400000);
+    // 1) Load airports
+    const [A, B] = await Promise.all([ getAirportByIATA(fromCode), getAirportByIATA(toCode) ]);
 
-    const AsunArray = [
-      calculateSunTimes(A.latitude, A.longitude, dayBefore),
-      calculateSunTimes(A.latitude, A.longitude, d),
-      calculateSunTimes(A.latitude, A.longitude, dayAfter)
+    // 2) In-house solar math for -1, 0, +1 day (UTC sunrise/sunset strings)
+    const [A_m1, A_0, A_p1] = [
+      calculateSunTimes(A.latitude, A.longitude, dM1),
+      calculateSunTimes(A.latitude, A.longitude, d0),
+      calculateSunTimes(A.latitude, A.longitude, dP1)
     ];
-    const BsunArray = [
-      calculateSunTimes(B.latitude, B.longitude, dayBefore),
-      calculateSunTimes(B.latitude, B.longitude, d),
-      calculateSunTimes(B.latitude, B.longitude, dayAfter)
+    const [B_m1, B_0, B_p1] = [
+      calculateSunTimes(B.latitude, B.longitude, dM1),
+      calculateSunTimes(B.latitude, B.longitude, d0),
+      calculateSunTimes(B.latitude, B.longitude, dP1)
     ];
-    
-    // Build 48h daylight intervals (for 3-day window)
-    const Aintervals = buildDaylightIntervals(AsunArray);
-    const Bintervals = buildDaylightIntervals(BsunArray);
 
-    // Debug logging (optional): see if intervals are correct
-    // console.log('Aintervals', Aintervals, 'Bintervals', Bintervals);
-    
-    // Calculate overlap on a continuous 48h UTC timeline
-    const overlap = findOverlap(Aintervals, Bintervals);
-    
-    // If no overlap found, try shifting B’s timeline forward 1 day (to handle wraparound)
-    if (!overlap.overlap) {
-      const shiftedB = Bintervals.map(([start, end]) => [start + 1440, end + 1440]);
-      const retry = findOverlap(Aintervals, shiftedB);
-      if (retry.overlap) Object.assign(overlap, retry);
-    }
+    // 3) Build continuous daylight/nighttime intervals for both airports
+    const AIntervals = buildContinuousIntervals(A_m1, A_0, A_p1);
+    const BIntervals = buildContinuousIntervals(B_m1, B_0, B_p1);
 
+    // 4) Find all overlapping segments that touch the requested day window
+    const daylight = findOverlapSegments(AIntervals.daylight,  BIntervals.daylight);
+    const nighttime = findOverlapSegments(AIntervals.nighttime, BIntervals.nighttime);
 
-
+    // 5) Return everything
     return NextResponse.json({
-      from: { code: from.toUpperCase(), ...A, today: AsunArray[1] },
-      to:   { code: to.toUpperCase(),   ...B, today: BsunArray[1] },
-      overlap
+      meta: {
+        dateUTC: d0.toISOString().slice(0,10),
+        windowUTC: '00:00–24:00'
+      },
+      from: {
+        code: A.iata,
+        name: A.name,
+        country: A.country,
+        timezone: A.timezone,
+        todayUTC: { sunrise: A_0.sunriseUTC, sunset: A_0.sunsetUTC }
+      },
+      to: {
+        code: B.iata,
+        name: B.name,
+        country: B.country,
+        timezone: B.timezone,
+        todayUTC: { sunrise: B_0.sunriseUTC, sunset: B_0.sunsetUTC }
+      },
+      overlap: {
+        daylight,   // {overlap, totalMinutes, segments:[{startUTC,endUTC,minutes}]}
+        nighttime   // same shape
+      }
     });
 
   } catch (e) {
