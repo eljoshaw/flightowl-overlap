@@ -36,29 +36,39 @@ function minutesToHHMM(mins) {
 // Takes an array of intervals [ [start,end], [start,end], ... ]
 // Returns total overlap in minutes between two sets of intervals
 function findOverlap(intervalsA, intervalsB) {
-  let total = 0;
-  let overlapStart = null;
-  let overlapEnd = null;
+  const overlaps = [];
 
   for (const [aStart, aEnd] of intervalsA) {
     for (const [bStart, bEnd] of intervalsB) {
-      const start = Math.max(aStart, bStart);
-      const end = Math.min(aEnd, bEnd);
-      if (end > start) {
-        total += end - start;
-        if (overlapStart === null || start < overlapStart) overlapStart = start;
-        if (overlapEnd === null || end > overlapEnd) overlapEnd = end;
+      // Normalize all intervals within 24h range
+      const start = Math.max(aStart % 1440, bStart % 1440);
+      const end = Math.min(aEnd % 1440, bEnd % 1440);
+
+      // Only store overlaps that make physical sense (not 25h+ spans)
+      if (end > start && end - start < 1440) {
+        overlaps.push([start, end]);
       }
     }
   }
 
-  if (total === 0) return { overlap: false };
+  if (overlaps.length === 0) {
+    return { overlap: false };
+  }
+
+  // Choose the largest single overlap period
+  const [overlapStart, overlapEnd] = overlaps.reduce((max, cur) =>
+    cur[1] - cur[0] > max[1] - max[0] ? cur : max
+  );
+
+  const durationMin = overlapEnd - overlapStart;
+
   return {
     overlap: true,
-    overlapUTC: `${minutesToHHMM(overlapStart % 1440)} → ${minutesToHHMM(overlapEnd % 1440)}`,
-    overlapDuration: `${Math.floor(total / 60)}h ${total % 60}m`
+    overlapUTC: `${minutesToHHMM(overlapStart)} → ${minutesToHHMM(overlapEnd)}`,
+    overlapDuration: `${Math.floor(durationMin / 60)}h ${durationMin % 60}m`,
   };
 }
+
 
 // Build 48-hour daylight intervals to handle overnight cases
 function buildDaylightIntervals(array) {
