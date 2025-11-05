@@ -61,16 +61,27 @@ function findOverlap(intervalsA, intervalsB) {
 }
 
 // Build 48-hour daylight intervals to handle overnight cases
-function buildDaylightIntervals(sunTimesArray) {
+function buildDaylightIntervals(array) {
+  // Each element: { sunriseUTC: "HH:MM", sunsetUTC: "HH:MM" }
   const intervals = [];
-  let base = -1440; // start from previous day
-  for (const times of sunTimesArray) {
-    if (times.sunriseUTC.includes('No')) continue;
-    const start = base + toMinutes(times.sunriseUTC);
-    const end = base + toMinutes(times.sunsetUTC);
-    if (end > start) intervals.push([start, end]);
-    base += 1440; // shift to next day window
-  }
+
+  array.forEach(day => {
+    const [sunriseH, sunriseM] = day.sunriseUTC.split(':').map(Number);
+    const [sunsetH, sunsetM] = day.sunsetUTC.split(':').map(Number);
+
+    const sunriseMin = sunriseH * 60 + sunriseM;
+    const sunsetMin = sunsetH * 60 + sunsetM;
+
+    // Handle days where sunset is after midnight (e.g. SYD)
+    if (sunsetMin < sunriseMin) {
+      // Split into two intervals: from sunrise → 1440, then 0 → sunset
+      intervals.push([sunriseMin, 1440]);
+      intervals.push([0, sunsetMin]);
+    } else {
+      intervals.push([sunriseMin, sunsetMin]);
+    }
+  });
+
   return intervals;
 }
 
