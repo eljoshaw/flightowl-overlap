@@ -1,0 +1,15 @@
+{
+  "name": "flightowl-overlap",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.x",
+    "next": "14.x",
+    "react": "18.x",
+    "react-dom": "18.x"
+  }
+}
