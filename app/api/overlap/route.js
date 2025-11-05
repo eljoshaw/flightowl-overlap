@@ -21,29 +21,59 @@ async function getAirportByIATA(iata) {
 }
 
 // Compute overlap between two daylight windows (same-day basic version)
-function getOverlapUTC(a, b) {
-  const toMin = (t) => { const [h,m] = t.split(':').map(Number); return h*60 + m; };
-  if (a.sunriseUTC.includes('No') || b.sunriseUTC.includes('No')) return { overlap: false };
+// --- New Improved Overlap Logic (handles cross-midnight daylight) ---
+function toMinutes(t) {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
 
-  const aStart = toMin(a.sunriseUTC);
-  const aEnd   = toMin(a.sunsetUTC);
-  const bStart = toMin(b.sunriseUTC);
-  const bEnd   = toMin(b.sunsetUTC);
+function minutesToHHMM(mins) {
+  const h = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
 
-  const start = Math.max(aStart, bStart);
-  const end   = Math.min(aEnd, bEnd);
-  if (end <= start) return { overlap: false };
+// Takes an array of intervals [ [start,end], [start,end], ... ]
+// Returns total overlap in minutes between two sets of intervals
+function findOverlap(intervalsA, intervalsB) {
+  let total = 0;
+  let overlapStart = null;
+  let overlapEnd = null;
 
-  const dur = end - start;
-  const hh = Math.floor(dur/60), mm = dur % 60;
-  const fmt = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+  for (const [aStart, aEnd] of intervalsA) {
+    for (const [bStart, bEnd] of intervalsB) {
+      const start = Math.max(aStart, bStart);
+      const end = Math.min(aEnd, bEnd);
+      if (end > start) {
+        total += end - start;
+        if (overlapStart === null || start < overlapStart) overlapStart = start;
+        if (overlapEnd === null || end > overlapEnd) overlapEnd = end;
+      }
+    }
+  }
 
+  if (total === 0) return { overlap: false };
   return {
     overlap: true,
-    overlapUTC: `${fmt(start)} → ${fmt(end)}`,
-    overlapDuration: `${hh}h ${mm}m`
+    overlapUTC: `${minutesToHHMM(overlapStart % 1440)} → ${minutesToHHMM(overlapEnd % 1440)}`,
+    overlapDuration: `${Math.floor(total / 60)}h ${total % 60}m`
   };
 }
+
+// Build 48-hour daylight intervals to handle overnight cases
+function buildDaylightIntervals(sunTimesArray) {
+  const intervals = [];
+  let base = -1440; // start from previous day
+  for (const times of sunTimesArray) {
+    if (times.sunriseUTC.includes('No')) continue;
+    const start = base + toMinutes(times.sunriseUTC);
+    const end = base + toMinutes(times.sunsetUTC);
+    if (end > start) intervals.push([start, end]);
+    base += 1440; // shift to next day window
+  }
+  return intervals;
+}
+
 
 export async function GET(req) {
   try {
@@ -59,13 +89,29 @@ export async function GET(req) {
     // 1) Lookup airports
     const [A, B] = await Promise.all([ getAirportByIATA(from), getAirportByIATA(to) ]);
 
-    // 2) Compute sunrise/sunset (UTC) for that date
-    const d = new Date(date + 'T00:00:00Z'); // midnight UTC for the given date
-    const Asun = calculateSunTimes(A.latitude, A.longitude, d);
-    const Bsun = calculateSunTimes(B.latitude, B.longitude, d);
+    // 2) Compute sunrise/sunset (UTC) for that date ±1 day
+    const d = new Date(date + 'T00:00:00Z');
+    const dayBefore = new Date(d.getTime() - 86400000);
+    const dayAfter = new Date(d.getTime() + 86400000);
 
-    // 3) Overlap (same-day basic first; we'll extend to prev/next day after this works)
-    const overlap = getOverlapUTC(Asun, Bsun);
+    const AsunArray = [
+      calculateSunTimes(A.latitude, A.longitude, dayBefore),
+      calculateSunTimes(A.latitude, A.longitude, d),
+      calculateSunTimes(A.latitude, A.longitude, dayAfter)
+    ];
+    const BsunArray = [
+      calculateSunTimes(B.latitude, B.longitude, dayBefore),
+      calculateSunTimes(B.latitude, B.longitude, d),
+      calculateSunTimes(B.latitude, B.longitude, dayAfter)
+    ];
+    
+    // Build 48h daylight intervals
+    const Aintervals = buildDaylightIntervals(AsunArray);
+    const Bintervals = buildDaylightIntervals(BsunArray);
+
+    // Find overlap
+    const overlap = findOverlap(Aintervals, Bintervals);
+
 
     return NextResponse.json({
       from: { code: from.toUpperCase(), ...A, ...Asun },
