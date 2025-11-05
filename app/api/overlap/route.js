@@ -105,12 +105,23 @@ export async function GET(req) {
       calculateSunTimes(B.latitude, B.longitude, dayAfter)
     ];
     
-    // Build 48h daylight intervals
+    // Build 48h daylight intervals (for 3-day window)
     const Aintervals = buildDaylightIntervals(AsunArray);
     const Bintervals = buildDaylightIntervals(BsunArray);
 
-    // Find overlap
+    // Debug logging (optional): see if intervals are correct
+    // console.log('Aintervals', Aintervals, 'Bintervals', Bintervals);
+    
+    // Calculate overlap on a continuous 48h UTC timeline
     const overlap = findOverlap(Aintervals, Bintervals);
+    
+    // If no overlap found, try shifting B’s timeline forward 1 day (to handle wraparound)
+    if (!overlap.overlap) {
+      const shiftedB = Bintervals.map(([start, end]) => [start + 1440, end + 1440]);
+      const retry = findOverlap(Aintervals, shiftedB);
+      if (retry.overlap) Object.assign(overlap, retry);
+    }
+
 
 
     return NextResponse.json({
