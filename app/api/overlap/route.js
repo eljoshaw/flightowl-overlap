@@ -114,10 +114,11 @@ export async function GET(req) {
 
 
     return NextResponse.json({
-      from: { code: from.toUpperCase(), ...A, ...Asun },
-      to:   { code: to.toUpperCase(),   ...B, ...Bsun },
+      from: { code: from.toUpperCase(), ...A, today: AsunArray[1] },
+      to:   { code: to.toUpperCase(),   ...B, today: BsunArray[1] },
       overlap
     });
+
   } catch (e) {
     return NextResponse.json({ error: e.message || 'Unknown error' }, { status: 500 });
   }
