@@ -23,61 +23,65 @@ const formatLocal = (hhmmUTC, dateISO, timeZone) => {
   }).format(dt);
 };
 
-function Bar({ label, segments, color, height = 18 }) {
-  // segments: [{ startUTC, endUTC }] (times as "HH:MM")
+function Bar({ airport, sunrise, sunset }) {
+  // Handle "wrap-around" daylight (e.g., Sydney)
+  const sunriseMin = toMinutes(sunrise);
+  const sunsetMin = toMinutes(sunset);
+  let daySegments = [];
+
+  if (sunriseMin < sunsetMin) {
+    // normal daylight same day
+    daySegments = [{ start: sunriseMin, end: sunsetMin }];
+  } else {
+    // daylight crosses midnight: two segments
+    daySegments = [
+      { start: 0, end: sunsetMin },         // from midnight to sunset
+      { start: sunriseMin, end: 1440 },     // sunrise to end of day
+    ];
+  }
+
+  const renderSegment = (start, end, color) => {
+    const left = (start / 1440) * 100;
+    const width = ((end - start) / 1440) * 100;
+    return (
+      <div
+        key={`${color}-${start}`}
+        style={{
+          position: "absolute",
+          left: `${left}%`,
+          width: `${width}%`,
+          height: "100%",
+          background: color,
+          borderRadius: 3,
+        }}
+      />
+    );
+  };
+
   return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ fontWeight: 600, marginBottom: 6 }}>{label}</div>
-      <div style={{ position: "relative", height, background: "#eee", borderRadius: 6 }}>
-        {/* baseline night background */}
-        <div
-          style={{
-            position: "absolute", inset: 0, background:
-              "repeating-linear-gradient(90deg,#f7f7f7 0 40px,#f1f1f1 40px 80px)"
-          }}
-        />
-        {segments.map((seg, idx) => {
-          const left = minutesToPct(toMinutes(seg.startUTC));
-          const right = minutesToPct(toMinutes(seg.endUTC));
-          const width = Math.max(0, right - left);
-          return (
-            <div
-              key={idx}
-              title={`${seg.startUTC} → ${seg.endUTC}`}
-              style={{
-                position: "absolute",
-                left: `${left}%`,
-                width: `${width}%`,
-                top: 0,
-                bottom: 0,
-                background: color,
-                borderRadius: 4,
-                opacity: 0.9,
-              }}
-            />
-          );
-        })}
-        {/* tick marks each 6 hours */}
-        {[0, 360, 720, 1080, 1440].map((t) => (
-          <div
-            key={t}
-            style={{
-              position: "absolute",
-              left: `${minutesToPct(t)}%`,
-              top: 0,
-              bottom: 0,
-              width: 1,
-              background: "rgba(0,0,0,0.08)"
-            }}
-          />
-        ))}
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>
+        {airport.name} ({airport.code})
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#666" }}>
+
+      <div style={{ position: "relative", height: 20, background: "#111", borderRadius: 4 }}>
+        {/* Daylight (yellow) segments */}
+        {daySegments.map((seg, i) => renderSegment(seg.start, seg.end, "#FFD966"))}
+      </div>
+
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        fontSize: 12,
+        color: "#666",
+        marginTop: 4
+      }}>
         <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
       </div>
     </div>
   );
 }
+
 
 export default function Page() {
   const [from, setFrom] = useState("DXB");
@@ -146,26 +150,17 @@ export default function Page() {
 
           {/* Airport day/night bars */}
           <Bar
-            label={`${data.from.name} (${data.from.code}) — daylight`}
-            segments={daySegs(data.from.todayUTC.sunrise, data.from.todayUTC.sunset)}
-            color="#FFD966"
-          />
-          <Bar
-            label={`${data.from.name} (${data.from.code}) — nighttime`}
-            segments={nightSegs(data.from.todayUTC.sunrise, data.from.todayUTC.sunset)}
-            color="#2F2F86"
+          airport={data.from}
+          sunrise={data.from.todayUTC.sunrise}
+          sunset={data.from.todayUTC.sunset}
           />
 
           <Bar
-            label={`${data.to.name} (${data.to.code}) — daylight`}
-            segments={daySegs(data.to.todayUTC.sunrise, data.to.todayUTC.sunset)}
-            color="#FFD966"
-          />
-          <Bar
-            label={`${data.to.name} (${data.to.code}) — nighttime`}
-            segments={nightSegs(data.to.todayUTC.sunrise, data.to.todayUTC.sunset)}
-            color="#2F2F86"
-          />
+          airport={data.to}
+          sunrise={data.to.todayUTC.sunrise}
+          sunset={data.to.todayUTC.sunset}
+        />
+
 
           {/* Shared overlap bands */}
           <h2 style={{ marginTop: 24 }}>Shared Overlap (UTC & Local)</h2>
