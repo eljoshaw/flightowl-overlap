@@ -1,14 +1,9 @@
-import './globals.css';
-
-export const metadata = {
-  title: 'FlightOwl • Daylight Overlap',
-  description: 'Compare daylight hours between airports',
-};
-
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body style={{ margin: 0, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto" }}>
+        {children}
+      </body>
     </html>
   );
 }
