@@ -24,22 +24,23 @@ const formatLocal = (hhmmUTC, dateISO, timeZone) => {
 };
 
 /** ---- UPDATED BAR COMPONENT ---- **/
+/** ---- UPDATED BAR COMPONENT WITH 6H GRID LINES ---- **/
 function Bar({ airport, sunrise, sunset, dateUTC }) {
   const sunriseMin = toMinutes(sunrise);
-  const sunsetMin = toMinutes(sunset);
+  const sunsetMin  = toMinutes(sunset);
   let daySegments = [];
 
   if (sunriseMin < sunsetMin) {
     daySegments = [{ start: sunriseMin, end: sunsetMin }];
   } else {
     daySegments = [
-      { start: 0, end: sunsetMin },
-      { start: sunriseMin, end: 1440 },
+      { start: 0,         end: sunsetMin },
+      { start: sunriseMin, end: 1440    },
     ];
   }
 
   const renderSegment = (start, end, color) => {
-    const left = (start / 1440) * 100;
+    const left  = (start / 1440) * 100;
     const width = ((end - start) / 1440) * 100;
     return (
       <div
@@ -56,11 +57,12 @@ function Bar({ airport, sunrise, sunset, dateUTC }) {
     );
   };
 
-  // ---- NEW LOCAL TIME LABELS ----
-  const ticks = [0, 360, 720, 1080, 1440]; // every 6 hours
+  // 6-hour ticks: 00:00, 06:00, 12:00, 18:00, 24:00 (in UTC minutes)
+  const ticks = [0, 360, 720, 1080, 1440];
+
   const labelUTCMinuteAsLocal = (minsUTC) => {
     const base = new Date(`${dateUTC}T00:00:00Z`);
-    const dt = new Date(base.getTime() + minsUTC * 60_000);
+    const dt   = new Date(base.getTime() + minsUTC * 60_000);
     return new Intl.DateTimeFormat("en-GB", {
       hour: "2-digit",
       minute: "2-digit",
@@ -75,19 +77,38 @@ function Bar({ airport, sunrise, sunset, dateUTC }) {
         {airport.name} ({airport.code}) — local time
       </div>
 
-      <div style={{ position: "relative", height: 20, background: "#111", borderRadius: 4 }}>
+      {/* Timeline container */}
+      <div style={{ position: "relative", height: 22, background: "#111", borderRadius: 4, overflow: "hidden" }}>
+        {/* --- GRID LINES every 6h (under the segments) --- */}
+        {ticks.map((t) => (
+          <div
+            key={`grid-${t}`}
+            style={{
+              position: "absolute",
+              left: `${(t / 1440) * 100}%`,
+              top: 0,
+              bottom: 0,
+              width: t === 0 || t === 1440 ? 1 : 1,
+              background: t === 720 ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.12)", // slightly brighter at 12:00
+              pointerEvents: "none",
+            }}
+          />
+        ))}
+
+        {/* Daylight segments on top */}
         {daySegments.map((seg) => renderSegment(seg.start, seg.end, "#FFD966"))}
       </div>
 
-      {/* Local time labels */}
+      {/* Local-time tick labels corresponding to those grid lines */}
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#666", marginTop: 4 }}>
         {ticks.map((t) => (
-          <span key={t}>{labelUTCMinuteAsLocal(t)}</span>
+          <span key={`label-${t}`}>{labelUTCMinuteAsLocal(t)}</span>
         ))}
       </div>
     </div>
   );
 }
+
 
 /** ---- MAIN PAGE ---- **/
 export default function Page() {
