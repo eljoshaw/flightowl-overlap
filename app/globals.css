@@ -6,6 +6,7 @@ body {
   color: #222;
 }
 
+/* --- Colour Tokens --- */
 :root{
   /* Soft pastels */
   --day-opaque: #FFEFA6;            /* yellow (opaque)  */
