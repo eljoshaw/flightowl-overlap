@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatInTimeZone, zonedTimeToUtc } from "date-fns-tz";
+import { formatInTimeZone, utcToZonedTime } from "date-fns-tz";
 import "./globals.css";
 
 /* ===========================================================
@@ -135,11 +135,12 @@ function VerticalTimeline({
   const sOtherUTC = toMinutes(other.sunriseUTC);
   const eOtherUTC = toMinutes(other.sunsetUTC);
 
-  // compute offset using real local midnights
-  const localMidnightUTC = zonedTimeToUtc(`${dateUTC}T00:00:00`, tz);
-  const otherMidnightUTC = zonedTimeToUtc(`${dateUTC}T00:00:00`, other.tz);
+  // compute offset using real local midnights (manual calc using utcToZonedTime)
+  const utcMidnight = new Date(`${dateUTC}T00:00:00Z`);
+  const localInThisZone = utcToZonedTime(utcMidnight, tz);
+  const localInOtherZone = utcToZonedTime(utcMidnight, other.tz);
   const offsetHoursReal =
-    (otherMidnightUTC.getTime() - localMidnightUTC.getTime()) / (1000 * 60 * 60);
+    (localInOtherZone.getTime() - localInThisZone.getTime()) / (1000 * 60 * 60);
 
   const pixelsPerHour = 35;
   const verticalShift = -offsetHoursReal * pixelsPerHour;
@@ -205,7 +206,6 @@ function VerticalTimeline({
           transition: "transform 0.3s ease",
         }}
       >
-        {/* Hour grid - full local midnight→midnight */}
         {hours.map((h) => {
           const hh = String(h).padStart(2, "0");
           const localTime = new Date(`${dateUTC}T${hh}:00:00`);
@@ -238,13 +238,9 @@ function VerticalTimeline({
           );
         })}
 
-        {/* Nighttime */}
         {renderSpan({ start: eUTC, end: sUTC, color: "rgba(169,201,255,0.8)", z: 2 })}
-
-        {/* Daytime */}
         {renderSpan({ start: sUTC, end: eUTC, color: "rgba(255,224,102,0.8)", z: 3 })}
 
-        {/* Shared sections */}
         {sharedDayEnd > sharedDayStart &&
           renderSpan({
             start: sharedDayStart,
@@ -262,7 +258,6 @@ function VerticalTimeline({
             z: 4,
           })}
 
-        {/* Fade bands */}
         <div
           style={{
             position: "absolute",
@@ -289,7 +284,6 @@ function VerticalTimeline({
         />
       </div>
 
-      {/* Sunrise / Sunset info */}
       <div style={{ fontSize: 12, marginTop: 4 }}>
         🌅 {sunrise} UTC <br />
         🌇 {sunset} UTC
