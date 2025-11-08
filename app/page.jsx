@@ -271,30 +271,33 @@ function VerticalTimeline({
             z: 4,
           })}
 
-        {/* Faint previous/next day bands */}
-        <div
-          style={{
-            position: "absolute",
-            top: "-10%",
-            left: 0,
-            right: 0,
-            height: "10%",
-            background: topFadeColor,
-            zIndex: 0,
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            bottom: "-10%",
-            left: 0,
-            right: 0,
-            height: "10%",
-            background: bottomFadeColor,
-            zIndex: 0,
-          }}
-        />
-      </div>
+        {/* Dynamic previous-day top band */}
+<div
+  style={{
+    position: "absolute",
+    top: `${-Math.max(offsetDiffHours, 0) * pixelsPerHour}px`,
+    left: 0,
+    right: 0,
+    height: `${Math.max(offsetDiffHours, 0) * pixelsPerHour}px`,
+    background: topFadeColor,
+    zIndex: 0,
+    opacity: 0.7,
+  }}
+/>
+
+{/* Dynamic next-day bottom band */}
+<div
+  style={{
+    position: "absolute",
+    bottom: `${-Math.max(-offsetDiffHours, 0) * pixelsPerHour}px`,
+    left: 0,
+    right: 0,
+    height: `${Math.max(-offsetDiffHours, 0) * pixelsPerHour}px`,
+    background: bottomFadeColor,
+    zIndex: 0,
+    opacity: 0.7,
+  }}
+/>
 
       {/* Sunrise / Sunset info */}
       <div style={{ fontSize: 12, marginTop: 4 }}>
