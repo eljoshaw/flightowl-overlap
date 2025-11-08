@@ -135,12 +135,18 @@ function VerticalTimeline({
   const sOtherUTC = toMinutes(other.sunriseUTC);
   const eOtherUTC = toMinutes(other.sunsetUTC);
 
-  // compute offset using real local midnights (manual calc using utcToZonedTime)
-  const utcMidnight = new Date(`${dateUTC}T00:00:00Z`);
-  const localInThisZone = utcToZonedTime(utcMidnight, tz);
-  const localInOtherZone = utcToZonedTime(utcMidnight, other.tz);
-  const offsetHoursReal =
-    (localInOtherZone.getTime() - localInThisZone.getTime()) / (1000 * 60 * 60);
+  /* ------------------------------------------------------------------
+     Compute offset difference manually (no date-fns dependency)
+     ------------------------------------------------------------------ */
+  function getOffsetHours(dateString, timeZone) {
+    const utc = new Date(`${dateString}T00:00:00Z`);
+    const local = new Date(utc.toLocaleString("en-US", { timeZone }));
+    return (local.getTime() - utc.getTime()) / (1000 * 60 * 60);
+  }
+
+  const offsetThis = getOffsetHours(dateUTC, tz);
+  const offsetOther = getOffsetHours(dateUTC, other.tz);
+  const offsetHoursReal = offsetOther - offsetThis;
 
   const pixelsPerHour = 35;
   const verticalShift = -offsetHoursReal * pixelsPerHour;
@@ -206,10 +212,16 @@ function VerticalTimeline({
           transition: "transform 0.3s ease",
         }}
       >
+        {/* Hour grid - full local midnight→midnight */}
         {hours.map((h) => {
           const hh = String(h).padStart(2, "0");
-          const localTime = new Date(`${dateUTC}T${hh}:00:00`);
-          const labelTime = formatInTimeZone(localTime, tz, "HH:mm");
+          const utcDate = new Date(`${dateUTC}T${hh}:00:00Z`);
+          const localTime = utcDate.toLocaleString("en-GB", {
+            timeZone: tz,
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          });
           return (
             <div
               key={h}
@@ -232,15 +244,19 @@ function VerticalTimeline({
                   color: "#999",
                 }}
               >
-                {labelTime}
+                {localTime}
               </span>
             </div>
           );
         })}
 
+        {/* Nighttime */}
         {renderSpan({ start: eUTC, end: sUTC, color: "rgba(169,201,255,0.8)", z: 2 })}
+
+        {/* Daytime */}
         {renderSpan({ start: sUTC, end: eUTC, color: "rgba(255,224,102,0.8)", z: 3 })}
 
+        {/* Shared sections */}
         {sharedDayEnd > sharedDayStart &&
           renderSpan({
             start: sharedDayStart,
@@ -258,6 +274,7 @@ function VerticalTimeline({
             z: 4,
           })}
 
+        {/* Fade bands */}
         <div
           style={{
             position: "absolute",
