@@ -1,189 +1,51 @@
 "use client";
-
 import { useState } from "react";
+import { formatInTimeZone } from "date-fns-tz";
 
-/** ---- small helpers ---- **/
-const toMinutes = (hhmm) => {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
-};
-
-const minutesToPct = (mins) => (mins / 1440) * 100;
-
-const formatLocal = (hhmmUTC, dateISO, timeZone) => {
-  // Convert "HH:MM" (UTC) on given date -> time in given IANA timeZone
-  const [h, m] = hhmmUTC.split(":").map(Number);
-  const base = new Date(`${dateISO}T00:00:00Z`);
-  const dt = new Date(base.getTime() + (h * 60 + m) * 60_000);
-  return new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone
-  }).format(dt);
-};
-
-/** ---- UPDATED BAR COMPONENT ---- **/
-/** ---- UPDATED BAR COMPONENT WITH 6H GRID LINES ---- **/
-function Bar({ airport, sunrise, sunset, dateUTC }) {
-  const sunriseMin = toMinutes(sunrise);
-  const sunsetMin  = toMinutes(sunset);
-  let daySegments = [];
-
-  if (sunriseMin < sunsetMin) {
-    daySegments = [{ start: sunriseMin, end: sunsetMin }];
-  } else {
-    daySegments = [
-      { start: 0,         end: sunsetMin },
-      { start: sunriseMin, end: 1440    },
-    ];
-  }
-
-  const renderSegment = (start, end, color) => {
-    const left  = (start / 1440) * 100;
-    const width = ((end - start) / 1440) * 100;
-    return (
-      <div
-        key={`${color}-${start}-${end}`}
-        style={{
-          position: "absolute",
-          left: `${left}%`,
-          width: `${width}%`,
-          height: "100%",
-          background: color,
-          borderRadius: 3,
-        }}
-      />
-    );
-  };
-
-  // 6-hour ticks: 00:00, 06:00, 12:00, 18:00, 24:00 (in UTC minutes)
-  const ticks = [0, 360, 720, 1080, 1440];
-
-  const labelUTCMinuteAsLocal = (minsUTC) => {
-    const base = new Date(`${dateUTC}T00:00:00Z`);
-    const dt   = new Date(base.getTime() + minsUTC * 60_000);
-    return new Intl.DateTimeFormat("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-      timeZone: airport.timezone,
-    }).format(dt);
-  };
-
-  return (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ fontWeight: 600, marginBottom: 6 }}>
-        {airport.name} ({airport.code}) — local time
-      </div>
-
-      {/* Timeline container */}
-      <div style={{ position: "relative", height: 22, background: "#111", borderRadius: 4, overflow: "hidden" }}>
-        {/* --- GRID LINES every 6h (under the segments) --- */}
-        {ticks.map((t) => (
-          <div
-            key={`grid-${t}`}
-            style={{
-              position: "absolute",
-              left: `${(t / 1440) * 100}%`,
-              top: 0,
-              bottom: 0,
-              width: t === 0 || t === 1440 ? 1 : 1,
-              background: t === 720 ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.12)", // slightly brighter at 12:00
-              pointerEvents: "none",
-            }}
-          />
-        ))}
-
-        {/* Daylight segments on top */}
-        {daySegments.map((seg) => renderSegment(seg.start, seg.end, "#FFD966"))}
-      </div>
-
-      {/* Local-time tick labels corresponding to those grid lines */}
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#666", marginTop: 4 }}>
-        {ticks.map((t) => (
-          <span key={`label-${t}`}>{labelUTCMinuteAsLocal(t)}</span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-
-/** ---- MAIN PAGE ---- **/
 export default function Page() {
+  const [data, setData] = useState(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10)); // default to today
+  const [date, setDate] = useState("");
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/overlap?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${encodeURIComponent(date)}`
-      );
-      const json = await res.json();
-      setData(json);
-    } finally {
-      setLoading(false);
-    }
+    const res = await fetch(`/api/overlap?from=${from}&to=${to}&date=${date}`);
+    const json = await res.json();
+    setData(json);
   }
 
   return (
-    <main style={{ maxWidth: 900, margin: "40px auto", padding: "0 20px" }}>
-      <h1 style={{ fontSize: 28, marginBottom: 12 }}>FlightOwl • Daylight Overlap</h1>
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: 20 }}>
+      <h1>FlightOwl Light Overlap</h1>
 
-      <form onSubmit={handleSubmit} style={{ marginBottom: 18 }}>
-        <label style={{ marginRight: 10 }}>
-          From:{" "}
-          <input
-            value={from}
-            onChange={(e) => setFrom(e.target.value.toUpperCase())}
-            placeholder="DXB"
-            maxLength={3}
-            required
-          />
-        </label>
-        <label style={{ marginRight: 10 }}>
-          To:{" "}
-          <input
-            value={to}
-            onChange={(e) => setTo(e.target.value.toUpperCase())}
-            placeholder="SYD"
-            maxLength={3}
-            required
-          />
-        </label>
-        <label style={{ marginRight: 10 }}>
-          Date (UTC):{" "}
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            required
-          />
-        </label>
-        <button type="submit" disabled={loading}>{loading ? "Checking..." : "Check"}</button>
+      <form onSubmit={handleSubmit} style={{ marginBottom: 24 }}>
+        <input
+          placeholder="From (e.g. LHR)"
+          value={from}
+          onChange={(e) => setFrom(e.target.value.toUpperCase())}
+          style={{ marginRight: 8 }}
+        />
+        <input
+          placeholder="To (e.g. SIN)"
+          value={to}
+          onChange={(e) => setTo(e.target.value.toUpperCase())}
+          style={{ marginRight: 8 }}
+        />
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <button type="submit">Show overlap</button>
       </form>
 
-      {!data && <p style={{ color: "#666" }}>Enter two IATA codes (e.g., DXB and SYD) and press “Check”.</p>}
-      {data?.error && <p style={{ color: "crimson" }}>{String(data.error)}</p>}
-
-      {data && !data.error && (
+      {data && (
         <>
-          <div style={{ marginBottom: 14, color: "#333" }}>
-            <strong>UTC Date:</strong> {data.meta?.dateUTC} &nbsp;•&nbsp; <strong>Window:</strong> {data.meta?.windowUTC}
-          </div>
-
-          {/* --- UPDATED BAR CALLS --- */}
           <Bar
             airport={data.from}
             sunrise={data.from.todayUTC.sunrise}
             sunset={data.from.todayUTC.sunset}
             dateUTC={data.meta.dateUTC}
+            otherSunrise={data.to.todayUTC.sunrise}
+            otherSunset={data.to.todayUTC.sunset}
+            otherLabel={data.to.name || data.to.code}
           />
 
           <Bar
@@ -191,69 +53,150 @@ export default function Page() {
             sunrise={data.to.todayUTC.sunrise}
             sunset={data.to.todayUTC.sunset}
             dateUTC={data.meta.dateUTC}
+            otherSunrise={data.from.todayUTC.sunrise}
+            otherSunset={data.from.todayUTC.sunset}
+            otherLabel={data.from.name || data.from.code}
           />
 
-          {/* Shared overlap bands */}
-          <h2 style={{ marginTop: 24 }}>Shared Overlap (UTC & Local)</h2>
-          <div style={{ display: "grid", gap: 12 }}>
-            {/* Daylight overlap */}
-            <div style={{ padding: 12, background: "#FFF8E1", border: "1px solid #F5E6A3", borderRadius: 8 }}>
-              <strong>Shared Daylight</strong>
-              {data.overlap?.daylight?.overlap ? (
-                <ul style={{ marginTop: 6 }}>
-                  {data.overlap.daylight.segments.map((s, i) => (
-                    <li key={i} style={{ lineHeight: 1.6 }}>
-                      <span>UTC: {s.startUTC} → {s.endUTC} ({Math.round(s.minutes / 60)}h {s.minutes % 60}m)</span>
-                      <br />
-                      <span>
-                        {data.from.code} local: {formatLocal(s.startUTC, data.meta.dateUTC, data.from.timezone)} → {formatLocal(s.endUTC, data.meta.dateUTC, data.from.timezone)}
-                      </span>
-                      <br />
-                      <span>
-                        {data.to.code} local: {formatLocal(s.startUTC, data.meta.dateUTC, data.to.timezone)} → {formatLocal(s.endUTC, data.meta.dateUTC, data.to.timezone)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div style={{ color: "#666" }}>No shared daylight in this UTC day.</div>
-              )}
-            </div>
-
-            {/* Nighttime overlap */}
-            <div style={{ padding: 12, background: "#E9EEFF", border: "1px solid #C9D4FF", borderRadius: 8 }}>
-              <strong>Shared Night</strong>
-              {data.overlap?.nighttime?.overlap ? (
-                <ul style={{ marginTop: 6 }}>
-                  {data.overlap.nighttime.segments.map((s, i) => (
-                    <li key={i} style={{ lineHeight: 1.6 }}>
-                      <span>UTC: {s.startUTC} → {s.endUTC} ({Math.round(s.minutes / 60)}h {s.minutes % 60}m)</span>
-                      <br />
-                      <span>
-                        {data.from.code} local: {formatLocal(s.startUTC, data.meta.dateUTC, data.from.timezone)} → {formatLocal(s.endUTC, data.meta.dateUTC, data.from.timezone)}
-                      </span>
-                      <br />
-                      <span>
-                        {data.to.code} local: {formatLocal(s.startUTC, data.meta.dateUTC, data.to.timezone)} → {formatLocal(s.endUTC, data.meta.dateUTC, data.to.timezone)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div style={{ color: "#666" }}>No shared night in this UTC day.</div>
-              )}
-            </div>
+          <div style={{ marginTop: 24 }}>
+            <Summary data={data} />
           </div>
-
-          {/* Raw JSON (debug) */}
-          <details style={{ marginTop: 18 }}>
-            <summary>Debug JSON</summary>
-            <pre style={{ background: "#f6f6f6", padding: 12, borderRadius: 6 }}>
-              {JSON.stringify(data, null, 2)}
-            </pre>
-          </details>
         </>
       )}
-    </main>
+    </div>
   );
+}
+
+/* ---------- TIMELINE BAR ---------- */
+function Bar({
+  airport,
+  sunrise,
+  sunset,
+  dateUTC,
+  otherSunrise,
+  otherSunset,
+  otherLabel = "",
+}) {
+  const ticks = [0, 6, 12, 18, 24];
+
+  return (
+    <div style={{ marginBottom: 40 }}>
+      <h3>{airport.name}</h3>
+      <div style={{ position: "relative", height: 22, background: "var(--axis-bg)" }}>
+        {/* Base night layer */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "var(--night-opaque)",
+          }}
+        />
+
+        {/* Day segment */}
+        {renderDaySegment(sunrise, sunset)}
+
+        {/* Hour grid */}
+        {ticks.map((h) => (
+          <div
+            key={h}
+            style={{
+              position: "absolute",
+              left: `${(h / 24) * 100}%`,
+              top: 0,
+              bottom: 0,
+              width: 1,
+              background: h % 12 === 0 ? "var(--grid-12)" : "var(--grid)",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Tick labels */}
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+        {ticks.map((h) => (
+          <span key={h}>{h.toString().padStart(2, "0")}:00</span>
+        ))}
+      </div>
+
+      {/* Own + translated labels */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+        <div style={{ fontSize: 12, lineHeight: 1.3 }}>
+          <div style={{ fontWeight: 600 }}>
+            00:00 • Sunrise {formatLocal(sunrise, dateUTC, airport.timezone)} • Sunset{" "}
+            {formatLocal(sunset, dateUTC, airport.timezone)}
+          </div>
+          <div style={{ color: "#777" }}>
+            {otherLabel} → Sunrise {formatLocal(otherSunrise, dateUTC, airport.timezone)} •
+            Sunset {formatLocal(otherSunset, dateUTC, airport.timezone)}
+          </div>
+        </div>
+        <div style={{ fontSize: 12, color: "#777" }}>{airport.timezone}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- SUMMARY BOXES ---------- */
+function Summary({ data }) {
+  return (
+    <>
+      <div
+        style={{
+          padding: 12,
+          background: "var(--chip-day-bg)",
+          border: "1px solid var(--chip-day-border)",
+          borderRadius: 8,
+          marginBottom: 12,
+        }}
+      >
+        <strong>Shared Daylight:</strong> {Math.round(data.overlap.daylight.totalMinutes / 60)} h 
+        {data.overlap.daylight.totalMinutes % 60} m
+      </div>
+
+      <div
+        style={{
+          padding: 12,
+          background: "var(--chip-night-bg)",
+          border: "1px solid var(--chip-night-border)",
+          borderRadius: 8,
+        }}
+      >
+        <strong>Shared Night:</strong> {Math.round(data.overlap.nighttime.totalMinutes / 60)} h 
+        {data.overlap.nighttime.totalMinutes % 60} m
+      </div>
+    </>
+  );
+}
+
+/* ---------- HELPERS ---------- */
+function renderDaySegment(sunrise, sunset) {
+  const start = toMinutes(sunrise);
+  const end = toMinutes(sunset);
+  const left = (start / 1440) * 100;
+  const width = ((end - start) / 1440) * 100;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        left: `${left}%`,
+        width: `${width}%`,
+        background: "var(--day-opaque)",
+      }}
+    />
+  );
+}
+
+function toMinutes(hhmm) {
+  if (!hhmm) return 0;
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function formatLocal(hhmmUTC, dateUTC, tz) {
+  if (!hhmmUTC) return "";
+  const [h, m] = hhmmUTC.split(":").map(Number);
+  const utcDate = new Date(`${dateUTC}T${hhmmUTC}:00Z`);
+  return formatInTimeZone(utcDate, tz, "HH:mm");
 }
