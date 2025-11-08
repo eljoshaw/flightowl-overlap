@@ -53,69 +53,66 @@ export default function Page() {
       </form>
 
       {/* Main Visualization */}
-      {data && (
-        (() => {
-          // Compute timezone offset difference
-          const offsetA =
-            data.from.utc_offset_hours ??
-            data.from.offsetHours ??
-            data.from.utcOffset ??
-            0;
-          const offsetB =
-            data.to.utc_offset_hours ??
-            data.to.offsetHours ??
-            data.to.utcOffset ??
-            0;
-          const offsetDiffHours = offsetB - offsetA;
+      {data && (() => {
+        const offsetA =
+          data.from.utc_offset_hours ??
+          data.from.offsetHours ??
+          data.from.utcOffset ??
+          0;
+        const offsetB =
+          data.to.utc_offset_hours ??
+          data.to.offsetHours ??
+          data.to.utcOffset ??
+          0;
+        const offsetDiffHours = offsetB - offsetA;
 
-          return (
-            <>
-              <div
-  style={{
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "flex-start",
-    gap: 60,
-    position: "relative",
-    zIndex: 2,
-  }}
->
-                {/* Left timeline (reference timezone) */}
-                <VerticalTimeline
-                  label={data.from.name}
-                  tz={data.from.timezone}
-                  sunrise={data.from.todayUTC.sunrise}
-                  sunset={data.from.todayUTC.sunset}
-                  dateUTC={data.meta.dateUTC}
-                  offsetDiffHours={0} // static reference
-                  other={{
-                    label: data.to.name,
-                    sunriseUTC: data.to.todayUTC.sunrise,
-                    sunsetUTC: data.to.todayUTC.sunset,
-                  }}
-                />
+        return (
+          <>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "flex-start",
+                gap: 60,
+                position: "relative",
+                zIndex: 2,
+              }}
+            >
+              {/* Left timeline (reference) */}
+              <VerticalTimeline
+                label={data.from.name}
+                tz={data.from.timezone}
+                sunrise={data.from.todayUTC.sunrise}
+                sunset={data.from.todayUTC.sunset}
+                dateUTC={data.meta.dateUTC}
+                offsetDiffHours={0}
+                other={{
+                  label: data.to.name,
+                  sunriseUTC: data.to.todayUTC.sunrise,
+                  sunsetUTC: data.to.todayUTC.sunset,
+                }}
+              />
 
-                {/* Right timeline (shifted by timezone offset) */}
-                <VerticalTimeline
-                  label={data.to.name}
-                  tz={data.to.timezone}
-                  sunrise={data.to.todayUTC.sunrise}
-                  sunset={data.to.todayUTC.sunset}
-                  dateUTC={data.meta.dateUTC}
-                  offsetDiffHours={offsetDiffHours}
-                  other={{
-                    label: data.from.name,
-                    sunriseUTC: data.from.todayUTC.sunrise,
-                    sunsetUTC: data.from.todayUTC.sunset,
-                  }}
-                />
-              </div>
+              {/* Right timeline (shifted) */}
+              <VerticalTimeline
+                label={data.to.name}
+                tz={data.to.timezone}
+                sunrise={data.to.todayUTC.sunrise}
+                sunset={data.to.todayUTC.sunset}
+                dateUTC={data.meta.dateUTC}
+                offsetDiffHours={offsetDiffHours}
+                other={{
+                  label: data.from.name,
+                  sunriseUTC: data.from.todayUTC.sunrise,
+                  sunsetUTC: data.from.todayUTC.sunset,
+                }}
+              />
+            </div>
 
-              <Summary data={data} />
-            </>
-          );
-        })()
-      )}
+            <Summary data={data} />
+          </>
+        );
+      })()}
     </div>
   );
 }
@@ -166,15 +163,14 @@ function VerticalTimeline({
     return blocks;
   };
 
-  // Shared daylight / night overlap (approx)
+  // Shared daylight / night overlap
   const sharedDayStart = Math.max(sUTC, sOtherUTC);
   const sharedDayEnd = Math.min(eUTC, eOtherUTC);
   const sharedNightStart = Math.max(eUTC, eOtherUTC);
   const sharedNightEnd = Math.min(sUTC, sOtherUTC);
 
-  // Visual positioning
   const pixelsPerHour = 35;
-  const verticalShift = -offsetDiffHours * pixelsPerHour; // east = up, west = down
+  const verticalShift = -offsetDiffHours * pixelsPerHour;
   const totalHeight = 24 * pixelsPerHour + Math.abs(offsetDiffHours) * pixelsPerHour;
 
   // Faint bands (previous/next day)
@@ -272,32 +268,33 @@ function VerticalTimeline({
           })}
 
         {/* Dynamic previous-day top band */}
-<div
-  style={{
-    position: "absolute",
-    top: `${-Math.max(offsetDiffHours, 0) * pixelsPerHour}px`,
-    left: 0,
-    right: 0,
-    height: `${Math.max(offsetDiffHours, 0) * pixelsPerHour}px`,
-    background: topFadeColor,
-    zIndex: 0,
-    opacity: 0.7,
-  }}
-/>
+        <div
+          style={{
+            position: "absolute",
+            top: `${-Math.max(offsetDiffHours, 0) * pixelsPerHour}px`,
+            left: 0,
+            right: 0,
+            height: `${Math.max(offsetDiffHours, 0) * pixelsPerHour}px`,
+            background: topFadeColor,
+            zIndex: 0,
+            opacity: 0.7,
+          }}
+        />
 
-{/* Dynamic next-day bottom band */}
-<div
-  style={{
-    position: "absolute",
-    bottom: `${-Math.max(-offsetDiffHours, 0) * pixelsPerHour}px`,
-    left: 0,
-    right: 0,
-    height: `${Math.max(-offsetDiffHours, 0) * pixelsPerHour}px`,
-    background: bottomFadeColor,
-    zIndex: 0,
-    opacity: 0.7,
-  }}
-/>
+        {/* Dynamic next-day bottom band */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: `${-Math.max(-offsetDiffHours, 0) * pixelsPerHour}px`,
+            left: 0,
+            right: 0,
+            height: `${Math.max(-offsetDiffHours, 0) * pixelsPerHour}px`,
+            background: bottomFadeColor,
+            zIndex: 0,
+            opacity: 0.7,
+          }}
+        />
+      </div>
 
       {/* Sunrise / Sunset info */}
       <div style={{ fontSize: 12, marginTop: 4 }}>
