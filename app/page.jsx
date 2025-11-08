@@ -53,6 +53,22 @@ export default function Page() {
 
       {data && (
         <>
+          {/* STEP 1: Calculate timezone offset difference */}
+          {(() => {
+            const offsetA =
+              data.from.utc_offset_hours ??
+              data.from.offsetHours ??
+              data.from.utcOffset ??
+              0;
+            const offsetB =
+              data.to.utc_offset_hours ??
+              data.to.offsetHours ??
+              data.to.utcOffset ??
+              0;
+            var offsetDiffHours = offsetB - offsetA;
+            return null;
+          })()}
+
           <div
             style={{
               display: "flex",
@@ -68,6 +84,7 @@ export default function Page() {
               sunrise={data.from.todayUTC.sunrise}
               sunset={data.from.todayUTC.sunset}
               dateUTC={data.meta.dateUTC}
+              offsetDiffHours={offsetDiffHours}
               other={{
                 label: data.to.name,
                 sunriseUTC: data.to.todayUTC.sunrise,
@@ -80,6 +97,7 @@ export default function Page() {
               sunrise={data.to.todayUTC.sunrise}
               sunset={data.to.todayUTC.sunset}
               dateUTC={data.meta.dateUTC}
+              offsetDiffHours={offsetDiffHours}
               other={{
                 label: data.from.name,
                 sunriseUTC: data.from.todayUTC.sunrise,
@@ -98,17 +116,23 @@ export default function Page() {
 /* ===========================================================
    VERTICAL TIMELINE COMPONENT
    =========================================================== */
-function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
-  // Each column runs 0–24h UTC
-  const hours = Array.from({ length: 13 }, (_, i) => i * 2); // 0, 2, 4...24
+function VerticalTimeline({
+  label,
+  tz,
+  sunrise,
+  sunset,
+  dateUTC,
+  other,
+  offsetDiffHours = 0,
+}) {
+  const hours = Array.from({ length: 13 }, (_, i) => i * 2);
 
-  // Convert sunrise/sunset UTC times into minutes of the UTC day
   const sUTC = toMinutes(sunrise);
   const eUTC = toMinutes(sunset);
   const sOtherUTC = toMinutes(other.sunriseUTC);
   const eOtherUTC = toMinutes(other.sunsetUTC);
 
-  // Handle wrap-around day
+  // Rendering helper
   const renderSpan = ({ start, end, color, dashed = false, z = 2 }) => {
     const blocks = [];
     const push = (a, b) =>
@@ -137,11 +161,14 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
     return blocks;
   };
 
-  // Overlap segments in UTC
   const sharedDayStart = Math.max(sUTC, sOtherUTC);
   const sharedDayEnd = Math.min(eUTC, eOtherUTC);
   const sharedNightStart = Math.max(eUTC, eOtherUTC);
   const sharedNightEnd = Math.min(sUTC, sOtherUTC);
+
+  // Vertical shift (px per hour)
+  const pixelsPerHour = 20;
+  const verticalShift = -offsetDiffHours * pixelsPerHour; // east = up, west = down
 
   return (
     <div style={{ textAlign: "center" }}>
@@ -158,9 +185,10 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
           border: "1px solid #ddd",
           background: "#fff",
           overflow: "hidden",
+          transform: `translateY(${verticalShift}px)`,
+          transition: "transform 0.3s ease",
         }}
       >
-        {/* Grid lines */}
         {hours.map((h) => (
           <div
             key={h}
@@ -188,7 +216,7 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
           </div>
         ))}
 
-        {/* Nighttime (base blue) */}
+        {/* Nighttime */}
         {renderSpan({
           start: eUTC,
           end: sUTC,
@@ -196,7 +224,7 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
           z: 2,
         })}
 
-        {/* Daytime (solid yellow) */}
+        {/* Daytime */}
         {renderSpan({
           start: sUTC,
           end: eUTC,
@@ -204,7 +232,7 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
           z: 3,
         })}
 
-        {/* Shared Daylight (orange dashed) */}
+        {/* Shared Daylight */}
         {sharedDayEnd > sharedDayStart &&
           renderSpan({
             start: sharedDayStart,
@@ -214,7 +242,7 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
             z: 4,
           })}
 
-        {/* Shared Night (orange dashed) */}
+        {/* Shared Night */}
         {sharedNightEnd > sharedNightStart &&
           renderSpan({
             start: sharedNightStart,
@@ -225,7 +253,6 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
           })}
       </div>
 
-      {/* Sunrise / Sunset indicators */}
       <div style={{ fontSize: 12, marginTop: 4 }}>
         🌅 {sunrise} UTC <br />
         🌇 {sunset} UTC
@@ -233,7 +260,6 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
     </div>
   );
 }
-
 
 /* ===========================================================
    SUMMARY BOXES
