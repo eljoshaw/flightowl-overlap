@@ -1,17 +1,56 @@
-:root{
-  /* Stronger pastel tones */
-  --day-opaque: #FFE066;            /* brighter yellow */
-  --night-opaque: #A9C9FF;          /* visible blue */
-  --day-faint: rgba(255,224,102,0.35);
-  --night-faint: rgba(169,201,255,0.35);
+/* ===========================================================
+   Global Styles for FlightOwl
+   =========================================================== */
 
-  /* Accents / borders */
-  --chip-day-bg:#FFF7D1;
-  --chip-day-border:#F3E6A4;
-  --chip-night-bg:#E9EEFF;
-  --chip-night-border:#C9D4FF;
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #fafafa;
+  color: #222;
+}
 
-  --axis-bg:#111;
-  --grid: rgba(0,0,0,0.08);
-  --grid-12: rgba(0,0,0,0.15);
+/* ===========================================================
+   Colour Variables — Stronger Pastels for Visibility
+   =========================================================== */
+:root {
+  /* Day & Night (primary palette) */
+  --day-opaque: #FFE066;             /* visible warm yellow */
+  --night-opaque: #A9C9FF;           /* visible pastel blue */
+  --day-faint: rgba(255, 224, 102, 0.35);  /* translucent yellow */
+  --night-faint: rgba(169, 201, 255, 0.35); /* translucent blue */
+
+  /* Accent Chips / Summary Boxes */
+  --chip-day-bg: #FFF7D1;
+  --chip-day-border: #F3E6A4;
+  --chip-night-bg: #E9EEFF;
+  --chip-night-border: #C9D4FF;
+
+  /* Grid Lines & Track */
+  --axis-bg: #111;
+  --grid: rgba(0, 0, 0, 0.08);
+  --grid-12: rgba(0, 0, 0, 0.15);
+}
+
+/* ===========================================================
+   Optional — Subtle Transitions & Smoothing
+   =========================================================== */
+
+* {
+  box-sizing: border-box;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+input, button {
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+button {
+  background: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #f1f1f1;
 }
