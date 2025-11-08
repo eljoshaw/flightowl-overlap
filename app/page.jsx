@@ -208,22 +208,39 @@ function VerticalTimeline({
         }}
       >
         {/* Hour grid with LOCAL labels */}
-        {hours.map((h) => {
-          const utcBase = new Date(`1970-01-01T${String(h).padStart(2, "0")}:00:00Z`);
-          const localLabel = formatInTimeZone(utcBase, tz, "HH:mm");
-          return (
-            <div
-              key={h}
-              style={{
-                position: "absolute",
-                top: `${(h / 24) * 100}%`,
-                left: 0,
-                right: 0,
-                height: 1,
-                background: "rgba(0,0,0,0.08)",
-                zIndex: 1,
-              }}
-            >
+       {hours.map((h) => {
+  // Use the ACTUAL selected UTC date, not 1970, to respect real offsets/DST
+  const hh = String(h).padStart(2, "0");
+  const utcOnSelectedDate = new Date(`${dateUTC}T${hh}:00:00Z`);
+  const localLabel = formatInTimeZone(utcOnSelectedDate, tz, "HH:mm");
+
+  return (
+    <div
+      key={h}
+      style={{
+        position: "absolute",
+        top: `${(h / 24) * 100}%`,
+        left: 0,
+        right: 0,
+        height: 1,
+        background: "rgba(0,0,0,0.08)",
+        zIndex: 1,
+      }}
+    >
+      <span
+        style={{
+          position: "absolute",
+          left: "-44px",
+          top: "-7px",
+          fontSize: 11,
+          color: "#999",
+        }}
+      >
+        {localLabel}
+      </span>
+    </div>
+  );
+})}
               <span
                 style={{
                   position: "absolute",
