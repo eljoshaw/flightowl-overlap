@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { formatInTimeZone } from "date-fns-tz";
 
+/* ===========================================================
+   MAIN PAGE
+   =========================================================== */
 export default function Page() {
   const [data, setData] = useState(null);
   const [from, setFrom] = useState("");
@@ -12,10 +15,6 @@ export default function Page() {
   async function handleSubmit(e) {
     e.preventDefault();
     const res = await fetch(`/api/overlap?from=${from}&to=${to}&date=${date}`);
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || "Request failed");
-    }
     const json = await res.json();
     setData(json);
   }
@@ -68,6 +67,11 @@ export default function Page() {
               sunrise={data.from.todayUTC.sunrise}
               sunset={data.from.todayUTC.sunset}
               dateUTC={data.meta.dateUTC}
+              other={{
+                label: data.to.name,
+                sunriseUTC: data.to.todayUTC.sunrise,
+                sunsetUTC: data.to.todayUTC.sunset,
+              }}
             />
             <VerticalTimeline
               label={data.to.name}
@@ -75,6 +79,11 @@ export default function Page() {
               sunrise={data.to.todayUTC.sunrise}
               sunset={data.to.todayUTC.sunset}
               dateUTC={data.meta.dateUTC}
+              other={{
+                label: data.from.name,
+                sunriseUTC: data.from.todayUTC.sunrise,
+                sunsetUTC: data.from.todayUTC.sunset,
+              }}
             />
           </div>
 
@@ -85,10 +94,17 @@ export default function Page() {
   );
 }
 
-/* ---------- VERTICAL TIMELINE ---------- */
-
-function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC }) {
+/* ===========================================================
+   VERTICAL TIMELINE COMPONENT
+   =========================================================== */
+function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
   const hours = Array.from({ length: 25 }, (_, i) => i); // 0–24
+
+  // convert hh:mm → fraction of 24 h
+  const s = toMinutes(sunrise) / 1440;
+  const e = toMinutes(sunset) / 1440;
+  const otherS = toMinutes(other.sunriseUTC) / 1440;
+  const otherE = toMinutes(other.sunsetUTC) / 1440;
 
   return (
     <div style={{ textAlign: "center" }}>
@@ -104,37 +120,48 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC }) {
           border: "1px solid #ddd",
           borderRadius: 6,
           background: "var(--night-opaque)",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
           overflow: "hidden",
         }}
       >
-        {/* placeholder daylight band — will be calculated precisely in Phase B */}
+        {/* --- Other city's daylight (faint spillover) --- */}
         <div
           style={{
             position: "absolute",
-            top: "25%",
-            height: "45%",
+            top: `${otherS * 100}%`,
+            height: `${(otherE - otherS) * 100}%`,
+            left: 0,
+            right: 0,
+            background: "var(--day-faint)",
+          }}
+        />
+
+        {/* --- This city's daylight (solid yellow) --- */}
+        <div
+          style={{
+            position: "absolute",
+            top: `${s * 100}%`,
+            height: `${(e - s) * 100}%`,
             left: 0,
             right: 0,
             background: "var(--day-opaque)",
           }}
         />
 
-        {/* hour grid lines */}
+        {/* --- Grid lines --- */}
         {hours.map((h) => (
           <div
             key={h}
             style={{
-              height: "4.16%",
+              position: "absolute",
+              top: `${(h / 24) * 100}%`,
+              left: 0,
+              right: 0,
               borderTop: h % 6 === 0 ? "1px solid #bbb" : "1px solid #eee",
               fontSize: 10,
               color: "#666",
+              paddingLeft: 4,
               display: "flex",
               alignItems: "center",
-              justifyContent: "flex-start",
-              paddingLeft: 4,
             }}
           >
             {h % 6 === 0 ? `${String(h).padStart(2, "0")}:00` : ""}
@@ -142,7 +169,6 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC }) {
         ))}
       </div>
 
-      {/* labels under each column */}
       <div style={{ fontSize: 12, marginTop: 4 }}>
         🌅 Sunrise {formatLocal(sunrise, dateUTC, tz)} <br />
         🌇 Sunset {formatLocal(sunset, dateUTC, tz)}
@@ -151,8 +177,9 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC }) {
   );
 }
 
-/* ---------- SUMMARY ---------- */
-
+/* ===========================================================
+   SUMMARY BOXES
+   =========================================================== */
 function Summary({ data }) {
   const dayM = data.overlap.daylight.totalMinutes || 0;
   const nightM = data.overlap.nighttime.totalMinutes || 0;
@@ -185,7 +212,14 @@ function Summary({ data }) {
   );
 }
 
-/* ---------- HELPERS ---------- */
+/* ===========================================================
+   HELPERS
+   =========================================================== */
+function toMinutes(hhmm) {
+  if (!hhmm) return 0;
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
 
 function formatLocal(hhmmUTC, dateUTC, tz) {
   if (!hhmmUTC) return "";
