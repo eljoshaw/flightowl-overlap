@@ -131,7 +131,7 @@ function VerticalTimeline({
   other,
   offsetDiffHours = 0,
 }) {
-  const hours = Array.from({ length: 13 }, (_, i) => i * 2);
+  const hours = Array.from({ length: 25 }, (_, i) => i);
   const sUTC = toMinutes(sunrise);
   const eUTC = toMinutes(sunset);
   const sOtherUTC = toMinutes(other.sunriseUTC);
@@ -172,7 +172,7 @@ function VerticalTimeline({
   const sharedNightEnd = Math.min(sUTC, sOtherUTC);
 
   // Visual positioning
-  const pixelsPerHour = 20;
+  const pixelsPerHour = 35;
   const verticalShift = -offsetDiffHours * pixelsPerHour; // east = up, west = down
   const totalHeight = 24 * pixelsPerHour + Math.abs(offsetDiffHours) * pixelsPerHour;
 
