@@ -51,28 +51,31 @@ export default function Page() {
         </button>
       </form>
 
-      {!data ? null : <Timelines data={data} />}
+      {data && <TimelinePair data={data} />}
     </div>
   );
 }
 
 /* ===========================================================
-   TIMELINES WRAPPER
+   TIMELINE PAIR LOGIC
    =========================================================== */
-function Timelines({ data }) {
-  // ---- offsets (hours) from backend (any of these three names) ----
+function TimelinePair({ data }) {
   const offA =
     data.from.utc_offset_hours ?? data.from.offsetHours ?? data.from.utcOffset ?? 0;
   const offB =
     data.to.utc_offset_hours ?? data.to.offsetHours ?? data.to.utcOffset ?? 0;
 
-  // ---- for the selected date, when is *local midnight* (in UTC) for each tz? ----
-  const A_midUTC = localMidnightUTC(data.meta.dateUTC, offA); // Date in UTC clock
-  const B_midUTC = localMidnightUTC(data.meta.dateUTC, offB); // Date in UTC clock
+  const dateUTC = data.meta.dateUTC;
+  const midA = localMidnightUTC(dateUTC, offA);
+  const midB = localMidnightUTC(dateUTC, offB);
 
-  // earlier midnight → top-anchored (starts at 00:00)
-  // later midnight   → bottom-anchored (ends   at 00:00)
-  const aIsEarlier = A_midUTC.getTime() <= B_midUTC.getTime();
+  // earlier midnight -> starts at top; later midnight -> ends at bottom
+  const aEarlier = midA.getTime() <= midB.getTime();
+
+  const first = aEarlier ? data.from : data.to;
+  const second = aEarlier ? data.to : data.from;
+  const firstOffset = aEarlier ? offA : offB;
+  const secondOffset = aEarlier ? offB : offA;
 
   return (
     <>
@@ -81,145 +84,91 @@ function Timelines({ data }) {
           display: "flex",
           justifyContent: "center",
           alignItems: "flex-start",
-          gap: 80,
+          gap: 60,
         }}
       >
-        {/* Left column is always the one whose midnight is earlier (top-anchored) */}
-        <VerticalTimeline
-          label={data.from.name}
-          tz={data.from.timezone}
-          dateUTC={data.meta.dateUTC}
-          sunriseUTC={data.from.todayUTC.sunrise}
-          sunsetUTC={data.from.todayUTC.sunset}
-          offsetHours={offA}
-          anchorMode={aIsEarlier ? "top00" : "bottom00"}
-          otherSunriseUTC={data.to.todayUTC.sunrise}
-          otherSunsetUTC={data.to.todayUTC.sunset}
+        <Timeline
+          airport={first}
+          offsetHours={firstOffset}
+          dateUTC={dateUTC}
+          anchor="start"
+          other={second}
         />
-
-        <VerticalTimeline
-          label={data.to.name}
-          tz={data.to.timezone}
-          dateUTC={data.meta.dateUTC}
-          sunriseUTC={data.to.todayUTC.sunrise}
-          sunsetUTC={data.to.todayUTC.sunset}
-          offsetHours={offB}
-          anchorMode={aIsEarlier ? "bottom00" : "top00"}
-          otherSunriseUTC={data.from.todayUTC.sunrise}
-          otherSunsetUTC={data.from.todayUTC.sunset}
+        <Timeline
+          airport={second}
+          offsetHours={secondOffset}
+          dateUTC={dateUTC}
+          anchor="end"
+          other={first}
         />
       </div>
-
       <Summary data={data} />
     </>
   );
 }
 
 /* ===========================================================
-   VERTICAL TIMELINE
+   SINGLE TIMELINE COMPONENT
    =========================================================== */
-/**
- * anchorMode:
- * - "top00"    => this column shows its local 00:00 at the TOP
- * - "bottom00" => this column shows its local 00:00 at the BOTTOM
- *
- * We render a fixed 24h viewport (outer). Inside it, we place a 24h track that
- * is vertically shifted so that either its local midnight is at the very top,
- * or (for the later-midnight timezone) at the very bottom.
- *
- * Day/night bands and labels move together (same transform), so alignment stays true.
- */
-function VerticalTimeline({
-  label,
-  tz,
-  dateUTC,
-  sunriseUTC,
-  sunsetUTC,
-  offsetHours,
-  anchorMode, // "top00" | "bottom00"
-  otherSunriseUTC,
-  otherSunsetUTC,
-}) {
-  const PPH = 35; // pixels per hour
+function Timeline({ airport, offsetHours, dateUTC, anchor, other }) {
+  const tz = airport.timezone;
+  const sunrise = airport.todayUTC.sunrise;
+  const sunset = airport.todayUTC.sunset;
+  const sUTC = toMinutes(sunrise);
+  const eUTC = toMinutes(sunset);
+
+  const sOtherUTC = toMinutes(other.todayUTC.sunrise);
+  const eOtherUTC = toMinutes(other.todayUTC.sunset);
+
+  const sharedDayStart = Math.max(sUTC, sOtherUTC);
+  const sharedDayEnd = Math.min(eUTC, eOtherUTC);
+  const sharedNightStart = Math.max(eUTC, eOtherUTC);
+  const sharedNightEnd = Math.min(sUTC, sOtherUTC);
+
+  const PPH = 35;
   const TRACK_H = 24 * PPH;
 
-  // UTC minutes for own day/night
-  const sUTC = toMinutes(sunriseUTC);
-  const eUTC = toMinutes(sunsetUTC);
-
-  // UTC minutes for the "other" location (used to draw shared bands)
-  const sOtherUTC = toMinutes(otherSunriseUTC);
-  const eOtherUTC = toMinutes(otherSunsetUTC);
-
-  // shared daylight / night (simple intersection in [0,1440))
-  const dayOverlapStart = Math.max(sUTC, sOtherUTC);
-  const dayOverlapEnd = Math.min(eUTC, eOtherUTC);
-  const nightOverlapStart = Math.max(eUTC, eOtherUTC);
-  const nightOverlapEnd = Math.min(sUTC, sOtherUTC);
-
-  // ----- VERTICAL SHIFT LOGIC -----
-  // local midnight (00:00 local) expressed as a UTC hour offset relative to the UTC 00:00 baseline
-  // For a tz offset +H (east), local midnight occurs at UTC = -H.
-  // We want the top of the track to be that local midnight when anchorMode === "top00",
-  // and we want the bottom of the track to be local midnight when anchorMode === "bottom00".
-  const baseShiftHours = -offsetHours; // put local midnight at top
-  const shiftHours = anchorMode === "top00" ? baseShiftHours : baseShiftHours + 24;
-  const translateYPx = shiftHours * PPH;
-
-  // ----- Faint previous/next-day bands -----
-  const showPrevH = Math.max(0, shiftHours); // area scrolled in from previous day
-  const showNextH = Math.max(0, -shiftHours); // area scrolled in from next day
-
-  // ----- Hour grid labels -----
-  // We print 0..24 lines. Their labels are "local time at this y".
-  // For anchorMode "top00": label base = local midnight (00:00) of the selected date.
-  // For anchorMode "bottom00": label base = local midnight of NEXT local day (so 00:00 is at bottom).
-  const localMidBaseUTC =
-    anchorMode === "top00"
-      ? localMidnightUTC(dateUTC, offsetHours)
-      : addHours(localMidnightUTC(dateUTC, offsetHours), 24);
+  const midUTC = localMidnightUTC(dateUTC, offsetHours);
+  const shiftY = anchor === "start" ? -offsetHours * PPH : (24 - offsetHours) * PPH;
 
   const hours = Array.from({ length: 25 }, (_, i) => i);
+  const labelBaseUTC =
+    anchor === "end" ? addHours(midUTC, 24) : midUTC;
 
   return (
     <div style={{ textAlign: "center" }}>
-      <h3 style={{ margin: 0 }}>{label}</h3>
-      <p style={{ margin: "2px 0 10px 0", fontSize: 12, color: "#666" }}>
-        {tz.replace("_", "/")}
-      </p>
+      <h3 style={{ marginBottom: 2 }}>{airport.name}</h3>
+      <p style={{ margin: 0, fontSize: 12, color: "#666" }}>{tz.replace("_", "/")}</p>
 
-      {/* Fixed 24h viewport */}
       <div
         style={{
           position: "relative",
-          width: 160,
+          width: 150,
           height: TRACK_H,
-          border: "1px solid #e5e7eb",
-          borderRadius: 12,
+          borderRadius: 10,
+          border: "1px solid #ddd",
           overflow: "hidden",
           background: "#fff",
         }}
       >
-        {/* Inner track (shifted) */}
         <div
           style={{
             position: "absolute",
             inset: 0,
-            transform: `translateY(${translateYPx}px)`,
-            transition: "transform 0.2s ease",
+            transform: `translateY(${shiftY}px)`,
+            transition: "transform 0.3s ease",
           }}
         >
-          {/* hour grid + labels (move with content) */}
+          {/* Hour grid */}
           {hours.map((h) => {
-            const y = (h / 24) * 100;
-            const tickUTC = addHours(localMidBaseUTC, h); // UTC instant for this grid line *in local sequence*
-            const labelText = formatInTimeZone(tickUTC, tz, "HH:mm");
+            const tickUTC = addHours(labelBaseUTC, h);
+            const label = formatInTimeZone(tickUTC, tz, "HH:mm");
             return (
               <div
                 key={h}
                 style={{
                   position: "absolute",
-                  top: `${y}%`,
+                  top: `${(h / 24) * 100}%`,
                   left: 0,
                   right: 0,
                   height: 1,
@@ -230,88 +179,45 @@ function VerticalTimeline({
                   style={{
                     position: "absolute",
                     left: "-44px",
-                    top: -7,
+                    top: "-7px",
                     fontSize: 11,
-                    color: "#8a8a8a",
+                    color: "#999",
                   }}
                 >
-                  {labelText}
+                  {label}
                 </span>
               </div>
             );
           })}
 
-          {/* Nighttime (blue) */}
-          {renderSpan({
-            start: eUTC,
-            end: sUTC,
-            color: "rgba(169,201,255,0.85)",
-          })}
-
-          {/* Daytime (yellow) */}
-          {renderSpan({
-            start: sUTC,
-            end: eUTC,
-            color: "rgba(255,224,102,0.85)",
-          })}
-
-          {/* Shared daylight (soft orange overlay) */}
-          {dayOverlapEnd > dayOverlapStart &&
+          {/* Night */}
+          {renderSpan({ start: eUTC, end: sUTC, color: "rgba(169,201,255,0.85)" })}
+          {/* Day */}
+          {renderSpan({ start: sUTC, end: eUTC, color: "rgba(255,224,102,0.85)" })}
+          {/* Shared Day */}
+          {sharedDayEnd > sharedDayStart &&
             renderSpan({
-              start: dayOverlapStart,
-              end: dayOverlapEnd,
+              start: sharedDayStart,
+              end: sharedDayEnd,
               color: "rgba(255,165,0,0.18)",
             })}
-
-          {/* Shared night (soft violet/blue overlay) */}
-          {nightOverlapEnd > nightOverlapStart &&
+          {/* Shared Night */}
+          {sharedNightEnd > sharedNightStart &&
             renderSpan({
-              start: nightOverlapStart,
-              end: nightOverlapEnd,
-              color: "rgba(120,120,255,0.12)",
+              start: sharedNightStart,
+              end: sharedNightEnd,
+              color: "rgba(169,201,255,0.12)",
             })}
         </div>
-
-        {/* Faint prev/next day hints (do NOT move with content) */}
-        {showPrevH > 0 && (
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: showPrevH * PPH,
-              background:
-                "linear-gradient(to bottom, rgba(0,0,0,0.06), rgba(0,0,0,0))",
-              pointerEvents: "none",
-            }}
-          />
-        )}
-        {showNextH > 0 && (
-          <div
-            style={{
-              position: "absolute",
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: showNextH * PPH,
-              background:
-                "linear-gradient(to top, rgba(0,0,0,0.06), rgba(0,0,0,0))",
-              pointerEvents: "none",
-            }}
-          />
-        )}
       </div>
 
-      {/* UTC sunrise/sunset (debug/info) */}
       <div style={{ fontSize: 12, marginTop: 6 }}>
-        <span style={{ marginRight: 8 }}>🌅 {sunriseUTC} UTC</span>
-        <span>🌇 {sunsetUTC} UTC</span>
+        🌅 {sunrise} UTC <br />
+        🌇 {sunset} UTC
       </div>
     </div>
   );
 
-  // ---- helpers scoped to component ----
   function renderSpan({ start, end, color }) {
     const blocks = [];
     const push = (a, b) =>
@@ -322,11 +228,10 @@ function VerticalTimeline({
             position: "absolute",
             top: `${(a / 1440) * 100}%`,
             height: `${((b - a) / 1440) * 100}%`,
-            left: 10,
-            right: 10,
-            borderRadius: 10,
+            left: 0,
+            right: 0,
             background: color,
-            boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.06)",
+            borderRadius: 6,
           }}
         />
       );
@@ -347,7 +252,7 @@ function Summary({ data }) {
   const nightM = data.overlap.nighttime.totalMinutes || 0;
 
   return (
-    <div style={{ marginTop: 24 }}>
+    <div style={{ marginTop: 30 }}>
       <div
         style={{
           padding: 12,
@@ -359,7 +264,6 @@ function Summary({ data }) {
       >
         <strong>Shared Daylight:</strong> {Math.floor(dayM / 60)} h {dayM % 60} m
       </div>
-
       <div
         style={{
           padding: 12,
@@ -375,26 +279,22 @@ function Summary({ data }) {
 }
 
 /* ===========================================================
-   PURE HELPERS
+   HELPERS
    =========================================================== */
 function toMinutes(hhmm) {
   if (!hhmm) return 0;
   const [h, m] = hhmm.split(":").map(Number);
-  return (h * 60 + m) % 1440; // 0..1439
+  return h * 60 + m;
 }
 
-function addHours(date, h) {
-  const d = new Date(date.getTime());
-  d.setUTCHours(d.getUTCHours() + h);
+function localMidnightUTC(dateUTC, offsetHours) {
+  const d = new Date(`${dateUTC}T00:00:00Z`);
+  d.setUTCHours(d.getUTCHours() - offsetHours);
   return d;
 }
 
-/**
- * Return a Date (UTC clock) corresponding to **00:00 local** on the given date in that tz.
- * If tz offset is +H (east), 00:00 local happens at UTC = dateUTC 00:00 - H hours.
- */
-function localMidnightUTC(dateUTC, offsetHours) {
-  const d = new Date(`${dateUTC}T00:00:00Z`);
-  d.setUTCHours(d.getUTCHours() - offsetHours, 0, 0, 0);
+function addHours(date, h) {
+  const d = new Date(date);
+  d.setUTCHours(d.getUTCHours() + h);
   return d;
 }
