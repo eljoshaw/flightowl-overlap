@@ -82,7 +82,7 @@ export default function Page() {
                 sunrise={data.from.todayUTC.sunrise}
                 sunset={data.from.todayUTC.sunset}
                 dateUTC={data.meta.dateUTC}
-                offsetDiffHours={offsetDiffHours}
+                offsetDiffHours={0}
                 other={{
                   label: data.to.name,
                   sunriseUTC: data.to.todayUTC.sunrise,
@@ -165,7 +165,10 @@ function VerticalTimeline({
 
   // Dynamic sizing and position
   const pixelsPerHour = 20;
-  const verticalShift = -offsetDiffHours * pixelsPerHour; // east = up, west = down
+
+// Only apply vertical shift if this is the "to" timeline
+// For now, we’ll manually tell React which one should shift (set in the render below)
+const verticalShift = -offsetDiffHours * pixelsPerHour;
   const totalHeight =
     24 * pixelsPerHour + Math.abs(offsetDiffHours) * pixelsPerHour;
 
