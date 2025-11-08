@@ -1,56 +1,115 @@
-/* ===========================================================
-   Global Styles for FlightOwl
-   =========================================================== */
-
 body {
   margin: 0;
   font-family: system-ui, sans-serif;
-  background: #fafafa;
+  background: #ffffff;
   color: #222;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
 }
 
-/* ===========================================================
-   Colour Variables — Stronger Pastels for Visibility
-   =========================================================== */
 :root {
-  /* Day & Night (primary palette) */
-  --day-opaque: #FFE066;             /* visible warm yellow */
-  --night-opaque: #A9C9FF;           /* visible pastel blue */
-  --day-faint: rgba(255, 224, 102, 0.35);  /* translucent yellow */
-  --night-faint: rgba(169, 201, 255, 0.35); /* translucent blue */
-
-  /* Accent Chips / Summary Boxes */
-  --chip-day-bg: #FFF7D1;
-  --chip-day-border: #F3E6A4;
-  --chip-night-bg: #E9EEFF;
-  --chip-night-border: #C9D4FF;
-
-  /* Grid Lines & Track */
-  --axis-bg: #111;
-  --grid: rgba(0, 0, 0, 0.08);
-  --grid-12: rgba(0, 0, 0, 0.15);
+  --day-opaque: #FFE066;
+  --night-opaque: #A9C9FF;
+  --day-faint: rgba(255, 224, 102, 0.3);
+  --night-faint: rgba(169, 201, 255, 0.3);
+  --overlap-border: #ff7b00;
 }
 
-/* ===========================================================
-   Optional — Subtle Transitions & Smoothing
-   =========================================================== */
-
-* {
-  box-sizing: border-box;
-  transition: background 0.3s ease, color 0.3s ease;
+/* Layout */
+.timeline-container {
+  display: flex;
+  gap: 4rem;
+  margin-top: 2rem;
+  align-items: flex-start;
 }
 
-input, button {
-  border: 1px solid #ccc;
-  border-radius: 6px;
+.timeline {
+  position: relative;
+  width: 140px;
+  height: 720px;
+  border: 2px solid #000;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.time-block {
+  width: 100%;
+  height: calc(100% / 24);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.time-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  width: 100%;
+  color: #333;
+}
+
+.timeline-title {
+  font-weight: bold;
+  text-align: center;
+  font-size: 20px;
+  margin-bottom: 0.25rem;
+}
+
+.timeline-sub {
+  text-align: center;
+  font-size: 12px;
+  color: #777;
+  margin-bottom: 0.5rem;
+}
+
+/* Day/Night coloring */
+.day {
+  background-color: var(--day-opaque);
+}
+
+.night {
+  background-color: var(--night-opaque);
+}
+
+.day-faint {
+  background-color: var(--day-faint);
+}
+
+.night-faint {
+  background-color: var(--night-faint);
+}
+
+/* Overlap indicator */
+.overlap-box {
+  position: absolute;
+  border: 2px dashed var(--overlap-border);
+  top: 30%;
+  height: 20%;
+  width: 100%;
+  left: 0;
+  pointer-events: none;
+}
+
+/* Time markers */
+.marker {
+  position: absolute;
+  left: -50px;
   font-size: 14px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-button {
-  background: #fff;
-  cursor: pointer;
+.marker.right {
+  left: auto;
+  right: -60px;
 }
 
-button:hover {
-  background: #f1f1f1;
+.sun {
+  color: #ffb300;
+}
+
+.moon {
+  color: #5555ff;
 }
