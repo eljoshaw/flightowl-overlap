@@ -24,6 +24,7 @@ export default function Page() {
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 20 }}>
       <h1 style={{ fontWeight: 700, marginBottom: 12 }}>FlightOwl Light Overlap</h1>
 
+      {/* Input form */}
       <form
         onSubmit={handleSubmit}
         style={{ marginBottom: 24, display: "flex", gap: 8, flexWrap: "wrap" }}
@@ -51,6 +52,7 @@ export default function Page() {
         </button>
       </form>
 
+      {/* Visualization */}
       {data && (() => {
         const offsetA =
           data.from.utc_offset_hours ??
@@ -76,7 +78,6 @@ export default function Page() {
                 zIndex: 2,
               }}
             >
-              {/* Left timeline (reference) */}
               <VerticalTimeline
                 label={data.from.name}
                 tz={data.from.timezone}
@@ -86,12 +87,12 @@ export default function Page() {
                 offsetDiffHours={0}
                 other={{
                   label: data.to.name,
+                  tz: data.to.timezone,
                   sunriseUTC: data.to.todayUTC.sunrise,
                   sunsetUTC: data.to.todayUTC.sunset,
                 }}
               />
 
-              {/* Right timeline (shifted) */}
               <VerticalTimeline
                 label={data.to.name}
                 tz={data.to.timezone}
@@ -101,6 +102,7 @@ export default function Page() {
                 offsetDiffHours={offsetDiffHours}
                 other={{
                   label: data.from.name,
+                  tz: data.from.timezone,
                   sunriseUTC: data.from.todayUTC.sunrise,
                   sunsetUTC: data.from.todayUTC.sunset,
                 }}
@@ -125,7 +127,6 @@ function VerticalTimeline({
   sunset,
   dateUTC,
   other,
-  offsetDiffHours = 0,
 }) {
   const hours = Array.from({ length: 25 }, (_, i) => i);
 
@@ -134,11 +135,11 @@ function VerticalTimeline({
   const sOtherUTC = toMinutes(other.sunriseUTC);
   const eOtherUTC = toMinutes(other.sunsetUTC);
 
-  /* Calculate proper visual offset using local midnights */
-  const localMidnight = zonedTimeToUtc(`${dateUTC}T00:00:00`, tz);
-  const otherMidnight = zonedTimeToUtc(`${dateUTC}T00:00:00`, other.tz || "UTC");
+  // compute offset using real local midnights
+  const localMidnightUTC = zonedTimeToUtc(`${dateUTC}T00:00:00`, tz);
+  const otherMidnightUTC = zonedTimeToUtc(`${dateUTC}T00:00:00`, other.tz);
   const offsetHoursReal =
-    (otherMidnight.getTime() - localMidnight.getTime()) / (1000 * 60 * 60);
+    (otherMidnightUTC.getTime() - localMidnightUTC.getTime()) / (1000 * 60 * 60);
 
   const pixelsPerHour = 35;
   const verticalShift = -offsetHoursReal * pixelsPerHour;
@@ -177,11 +178,11 @@ function VerticalTimeline({
   const sharedNightEnd = Math.min(sUTC, sOtherUTC);
 
   const topFadeColor =
-    offsetDiffHours >= 0
+    offsetHoursReal >= 0
       ? "linear-gradient(to bottom, rgba(255,224,102,0.3), rgba(255,224,102,0))"
       : "linear-gradient(to bottom, rgba(169,201,255,0.3), rgba(169,201,255,0))";
   const bottomFadeColor =
-    offsetDiffHours >= 0
+    offsetHoursReal >= 0
       ? "linear-gradient(to top, rgba(169,201,255,0.3), rgba(169,201,255,0))"
       : "linear-gradient(to top, rgba(255,224,102,0.3), rgba(255,224,102,0))";
 
@@ -204,7 +205,7 @@ function VerticalTimeline({
           transition: "transform 0.3s ease",
         }}
       >
-        {/* Local midnight → midnight grid */}
+        {/* Hour grid - full local midnight→midnight */}
         {hours.map((h) => {
           const hh = String(h).padStart(2, "0");
           const localTime = new Date(`${dateUTC}T${hh}:00:00`);
@@ -238,22 +239,12 @@ function VerticalTimeline({
         })}
 
         {/* Nighttime */}
-        {renderSpan({
-          start: eUTC,
-          end: sUTC,
-          color: "rgba(169,201,255,0.8)",
-          z: 2,
-        })}
+        {renderSpan({ start: eUTC, end: sUTC, color: "rgba(169,201,255,0.8)", z: 2 })}
 
         {/* Daytime */}
-        {renderSpan({
-          start: sUTC,
-          end: eUTC,
-          color: "rgba(255,224,102,0.8)",
-          z: 3,
-        })}
+        {renderSpan({ start: sUTC, end: eUTC, color: "rgba(255,224,102,0.8)", z: 3 })}
 
-        {/* Shared daylight */}
+        {/* Shared sections */}
         {sharedDayEnd > sharedDayStart &&
           renderSpan({
             start: sharedDayStart,
@@ -262,8 +253,6 @@ function VerticalTimeline({
             dashed: true,
             z: 4,
           })}
-
-        {/* Shared night */}
         {sharedNightEnd > sharedNightStart &&
           renderSpan({
             start: sharedNightStart,
@@ -329,7 +318,6 @@ function Summary({ data }) {
       >
         <strong>Shared Daylight:</strong> {Math.floor(dayM / 60)} h {dayM % 60} m
       </div>
-
       <div
         style={{
           padding: 12,
