@@ -24,7 +24,6 @@ export default function Page() {
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 20 }}>
       <h1 style={{ fontWeight: 700, marginBottom: 12 }}>FlightOwl Light Overlap</h1>
 
-      {/* Inputs */}
       <form
         onSubmit={handleSubmit}
         style={{ marginBottom: 24, display: "flex", gap: 8, flexWrap: "wrap" }}
@@ -52,68 +51,68 @@ export default function Page() {
         </button>
       </form>
 
-      {/* Visualization */}
-      {data && (() => {
-        const offsetA =
-          data.from.utc_offset_hours ??
-          data.from.offsetHours ??
-          data.from.utcOffset ??
-          0;
-        const offsetB =
-          data.to.utc_offset_hours ??
-          data.to.offsetHours ??
-          data.to.utcOffset ??
-          0;
+      {data && (
+        (() => {
+          const offsetA =
+            data.from.utc_offset_hours ??
+            data.from.offsetHours ??
+            data.from.utcOffset ??
+            0;
+          const offsetB =
+            data.to.utc_offset_hours ??
+            data.to.offsetHours ??
+            data.to.utcOffset ??
+            0;
+          const offsetDiffHours = offsetB - offsetA;
 
-        const offsetDiffHours = offsetB - offsetA; // >0 => "to" is east of "from"
-
-        return (
-          <>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "flex-start",
-                gap: 60,
-                position: "relative",
-                zIndex: 2,
-              }}
-            >
-              {/* Reference (no shift) */}
-              <VerticalTimeline
-                label={data.from.name}
-                tz={data.from.timezone}
-                sunrise={data.from.todayUTC.sunrise}
-                sunset={data.from.todayUTC.sunset}
-                dateUTC={data.meta.dateUTC}
-                offsetDiffHours={0}
-                other={{
-                  label: data.to.name,
-                  sunriseUTC: data.to.todayUTC.sunrise,
-                  sunsetUTC: data.to.todayUTC.sunset,
+          return (
+            <>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "flex-start",
+                  gap: 60,
+                  position: "relative",
+                  zIndex: 2,
                 }}
-              />
+              >
+                {/* Left timeline (reference) */}
+                <VerticalTimeline
+                  label={data.from.name}
+                  tz={data.from.timezone}
+                  sunrise={data.from.todayUTC.sunrise}
+                  sunset={data.from.todayUTC.sunset}
+                  dateUTC={data.meta.dateUTC}
+                  offsetDiffHours={0}
+                  other={{
+                    label: data.to.name,
+                    sunriseUTC: data.to.todayUTC.sunrise,
+                    sunsetUTC: data.to.todayUTC.sunset,
+                  }}
+                />
 
-              {/* Shifted by timezone diff */}
-              <VerticalTimeline
-                label={data.to.name}
-                tz={data.to.timezone}
-                sunrise={data.to.todayUTC.sunrise}
-                sunset={data.to.todayUTC.sunset}
-                dateUTC={data.meta.dateUTC}
-                offsetDiffHours={offsetDiffHours}
-                other={{
-                  label: data.from.name,
-                  sunriseUTC: data.from.todayUTC.sunrise,
-                  sunsetUTC: data.from.todayUTC.sunset,
-                }}
-              />
-            </div>
+                {/* Right timeline (shifted) */}
+                <VerticalTimeline
+                  label={data.to.name}
+                  tz={data.to.timezone}
+                  sunrise={data.to.todayUTC.sunrise}
+                  sunset={data.to.todayUTC.sunset}
+                  dateUTC={data.meta.dateUTC}
+                  offsetDiffHours={offsetDiffHours}
+                  other={{
+                    label: data.from.name,
+                    sunriseUTC: data.from.todayUTC.sunrise,
+                    sunsetUTC: data.from.todayUTC.sunset,
+                  }}
+                />
+              </div>
 
-            <Summary data={data} />
-          </>
-        );
-      })()}
+              <Summary data={data} />
+            </>
+          );
+        })()
+      )}
     </div>
   );
 }
@@ -130,20 +129,16 @@ function VerticalTimeline({
   other,
   offsetDiffHours = 0,
 }) {
-  // Hour grid (0..24 markers)
   const hours = Array.from({ length: 25 }, (_, i) => i);
-
-  // Sunrise/sunset expressed as minutes in the UTC day (for spans)
   const sUTC = toMinutes(sunrise);
   const eUTC = toMinutes(sunset);
   const sOtherUTC = toMinutes(other.sunriseUTC);
   const eOtherUTC = toMinutes(other.sunsetUTC);
 
-  // Render helper for spans (handles wrap)
   const renderSpan = ({ start, end, color, dashed = false, z = 2 }) => {
-    const parts = [];
+    const blocks = [];
     const push = (a, b) =>
-      parts.push(
+      blocks.push(
         <div
           key={`${a}-${b}-${color}-${dashed}`}
           style={{
@@ -164,21 +159,18 @@ function VerticalTimeline({
       push(start, 1440);
       push(0, end);
     }
-    return parts;
+    return blocks;
   };
 
-  // Approx overlap bands (vis only; backend already computes totals)
   const sharedDayStart = Math.max(sUTC, sOtherUTC);
   const sharedDayEnd = Math.min(eUTC, eOtherUTC);
   const sharedNightStart = Math.max(eUTC, eOtherUTC);
   const sharedNightEnd = Math.min(sUTC, sOtherUTC);
 
-  // Column geometry
-  const pixelsPerHour = 35; // 1 marker per hour
-  const verticalShift = -offsetDiffHours * pixelsPerHour; // east => up
+  const pixelsPerHour = 35;
+  const verticalShift = -offsetDiffHours * pixelsPerHour;
   const totalHeight = 24 * pixelsPerHour + Math.abs(offsetDiffHours) * pixelsPerHour;
 
-  // Faint previous/next day bands
   const topFadeColor =
     offsetDiffHours >= 0
       ? "linear-gradient(to bottom, rgba(255,224,102,0.3), rgba(255,224,102,0))"
@@ -202,45 +194,29 @@ function VerticalTimeline({
           borderRadius: 10,
           border: "1px solid #ddd",
           background: "#fff",
-          overflow: "visible", // allow faint bands to peek out
+          overflow: "visible",
           transform: `translateY(${verticalShift}px)`,
           transition: "transform 0.3s ease",
         }}
       >
-        {/* Hour grid with LOCAL labels */}
-       {hours.map((h) => {
-  // Use the ACTUAL selected UTC date, not 1970, to respect real offsets/DST
-  const hh = String(h).padStart(2, "0");
-  const utcOnSelectedDate = new Date(`${dateUTC}T${hh}:00:00Z`);
-  const localLabel = formatInTimeZone(utcOnSelectedDate, tz, "HH:mm");
-
-  return (
-    <div
-      key={h}
-      style={{
-        position: "absolute",
-        top: `${(h / 24) * 100}%`,
-        left: 0,
-        right: 0,
-        height: 1,
-        background: "rgba(0,0,0,0.08)",
-        zIndex: 1,
-      }}
-    >
-      <span
-        style={{
-          position: "absolute",
-          left: "-44px",
-          top: "-7px",
-          fontSize: 11,
-          color: "#999",
-        }}
-      >
-        {localLabel}
-      </span>
-    </div>
-  );
-})}
+        {/* Hour grid using ACTUAL selected date */}
+        {hours.map((h) => {
+          const hh = String(h).padStart(2, "0");
+          const utcDate = new Date(`${dateUTC}T${hh}:00:00Z`);
+          const localLabel = formatInTimeZone(utcDate, tz, "HH:mm");
+          return (
+            <div
+              key={h}
+              style={{
+                position: "absolute",
+                top: `${(h / 24) * 100}%`,
+                left: 0,
+                right: 0,
+                height: 1,
+                background: "rgba(0,0,0,0.08)",
+                zIndex: 1,
+              }}
+            >
               <span
                 style={{
                   position: "absolute",
@@ -256,7 +232,7 @@ function VerticalTimeline({
           );
         })}
 
-        {/* Nighttime (base) */}
+        {/* Nighttime */}
         {renderSpan({
           start: eUTC,
           end: sUTC,
@@ -272,7 +248,7 @@ function VerticalTimeline({
           z: 3,
         })}
 
-        {/* Shared Daylight (dashed orange) */}
+        {/* Shared Day */}
         {sharedDayEnd > sharedDayStart &&
           renderSpan({
             start: sharedDayStart,
@@ -282,7 +258,7 @@ function VerticalTimeline({
             z: 4,
           })}
 
-        {/* Shared Night (dashed orange) */}
+        {/* Shared Night */}
         {sharedNightEnd > sharedNightStart &&
           renderSpan({
             start: sharedNightStart,
@@ -292,7 +268,7 @@ function VerticalTimeline({
             z: 4,
           })}
 
-        {/* Faint previous-day band (top) */}
+        {/* Previous day band */}
         <div
           style={{
             position: "absolute",
@@ -306,7 +282,7 @@ function VerticalTimeline({
           }}
         />
 
-        {/* Faint next-day band (bottom) */}
+        {/* Next day band */}
         <div
           style={{
             position: "absolute",
@@ -321,7 +297,7 @@ function VerticalTimeline({
         />
       </div>
 
-      {/* Sunrise / Sunset info (UTC strings from API, kept for reference) */}
+      {/* Sunrise / Sunset info */}
       <div style={{ fontSize: 12, marginTop: 4 }}>
         🌅 {sunrise} UTC <br />
         🌇 {sunset} UTC
