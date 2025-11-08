@@ -198,7 +198,7 @@ function VerticalTimeline({
           borderRadius: 10,
           border: "1px solid #ddd",
           background: "#fff",
-          overflow: "hidden",
+          overflow: "visable",
           transform: `translateY(${verticalShift}px)`,
           transition: "transform 0.3s ease",
         }}
