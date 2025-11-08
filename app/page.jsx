@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatInTimeZone } from "date-fns-tz";
+import "./globals.css";
 
 /* ===========================================================
    MAIN PAGE
@@ -98,13 +99,46 @@ export default function Page() {
    VERTICAL TIMELINE COMPONENT
    =========================================================== */
 function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
-  const hours = Array.from({ length: 25 }, (_, i) => i); // 0–24
+  const hours = Array.from({ length: 25 }, (_, i) => i);
 
-  // convert hh:mm → fraction of 24 h
-  const s = toMinutes(sunrise) / 1440;
-  const e = toMinutes(sunset) / 1440;
-  const otherS = toMinutes(other.sunriseUTC) / 1440;
-  const otherE = toMinutes(other.sunsetUTC) / 1440;
+  // convert this city's times
+  const sLocal = toMinutes(sunrise);
+  const eLocal = toMinutes(sunset);
+
+  // convert other city's UTC → this city's local
+  const otherSunriseLocal = formatLocal(other.sunriseUTC, dateUTC, tz);
+  const otherSunsetLocal = formatLocal(other.sunsetUTC, dateUTC, tz);
+  const sOtherLocal = toMinutes(otherSunriseLocal);
+  const eOtherLocal = toMinutes(otherSunsetLocal);
+
+  // helper to draw a block that might cross midnight
+  const renderSpan = ({ start, end, color, dashed = false, z = 2 }) => {
+    const blocks = [];
+    const push = (a, b) =>
+      blocks.push(
+        <div
+          key={`${a}-${b}-${color}-${dashed}`}
+          style={{
+            position: "absolute",
+            top: `${(a / 1440) * 100}%`,
+            height: `${((b - a) / 1440) * 100}%`,
+            left: 0,
+            right: 0,
+            background: color,
+            border: dashed ? "2px dashed orange" : "none",
+            borderRadius: 6,
+            zIndex: z,
+          }}
+        />
+      );
+
+    if (end > start) push(start, end);
+    else {
+      push(start, 1440);
+      push(0, end);
+    }
+    return blocks;
+  };
 
   return (
     <div style={{ textAlign: "center" }}>
@@ -123,31 +157,32 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
           overflow: "hidden",
         }}
       >
-        {/* --- Other city's daylight (faint spillover) --- */}
-        <div
-          style={{
-            position: "absolute",
-            top: `${otherS * 100}%`,
-            height: `${(otherE - otherS) * 100}%`,
-            left: 0,
-            right: 0,
-            background: "var(--day-faint)",
-          }}
-        />
+        {/* Faint band of the other city's daylight */}
+        {renderSpan({
+          start: sOtherLocal,
+          end: eOtherLocal,
+          color: "var(--day-faint)",
+          z: 2,
+        })}
 
-        {/* --- This city's daylight (solid yellow) --- */}
-        <div
-          style={{
-            position: "absolute",
-            top: `${s * 100}%`,
-            height: `${(e - s) * 100}%`,
-            left: 0,
-            right: 0,
-            background: "var(--day-opaque)",
-          }}
-        />
+        {/* This city's daylight */}
+        {renderSpan({
+          start: sLocal,
+          end: eLocal,
+          color: "var(--day-opaque)",
+          z: 3,
+        })}
 
-        {/* --- Grid lines --- */}
+        {/* Orange dashed overlap */}
+        {renderSpan({
+          start: Math.max(sLocal, sOtherLocal),
+          end: Math.min(eLocal, eOtherLocal),
+          color: "rgba(255,165,0,0.15)",
+          dashed: true,
+          z: 4,
+        })}
+
+        {/* Hour grid lines */}
         {hours.map((h) => (
           <div
             key={h}
@@ -162,6 +197,7 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
               paddingLeft: 4,
               display: "flex",
               alignItems: "center",
+              zIndex: 1,
             }}
           >
             {h % 6 === 0 ? `${String(h).padStart(2, "0")}:00` : ""}
@@ -189,8 +225,8 @@ function Summary({ data }) {
       <div
         style={{
           padding: 12,
-          background: "var(--chip-day-bg)",
-          border: "1px solid var(--chip-day-border)",
+          background: "rgba(255,224,102,0.18)",
+          border: "1px solid rgba(255,224,102,0.6)",
           borderRadius: 8,
           marginBottom: 12,
         }}
@@ -201,8 +237,8 @@ function Summary({ data }) {
       <div
         style={{
           padding: 12,
-          background: "var(--chip-night-bg)",
-          border: "1px solid var(--chip-night-border)",
+          background: "rgba(169,201,255,0.18)",
+          border: "1px solid rgba(169,201,255,0.6)",
           borderRadius: 8,
         }}
       >
