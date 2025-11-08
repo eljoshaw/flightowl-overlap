@@ -58,7 +58,7 @@ export default function Page() {
 }
 
 /* ===========================================================
-   TIMELINE COMPARISON (order and columns)
+   TIMELINE COMPARISON
    =========================================================== */
 function TimelineComparison({ data }) {
   const offsetA =
@@ -73,7 +73,6 @@ function TimelineComparison({ data }) {
     0;
 
   const dateUTC = data.meta.dateUTC;
-
   const utcMidA = localMidnightUTC(dateUTC, offsetA);
   const utcMidB = localMidnightUTC(dateUTC, offsetB);
 
@@ -97,12 +96,14 @@ function TimelineComparison({ data }) {
           zIndex: 2,
         }}
       >
+        {/* Left: starts at 00:00 */}
         <VerticalTimeline
           label={left.name}
           tz={left.timezone}
           sunrise={left.todayUTC.sunrise}
           sunset={left.todayUTC.sunset}
           dateUTC={dateUTC}
+          offsetHours={offsetLeft}
           offsetDiffHours={0}
           labelMode="top00"
           other={{
@@ -112,12 +113,14 @@ function TimelineComparison({ data }) {
             sunsetUTC: right.todayUTC.sunset,
           }}
         />
+        {/* Right: ends at 00:00 */}
         <VerticalTimeline
           label={right.name}
           tz={right.timezone}
           sunrise={right.todayUTC.sunrise}
           sunset={right.todayUTC.sunset}
           dateUTC={dateUTC}
+          offsetHours={offsetRight}
           offsetDiffHours={offsetDiff}
           labelMode="bottom00"
           other={{
@@ -142,25 +145,32 @@ function VerticalTimeline({
   sunrise,
   sunset,
   dateUTC,
+  offsetHours,
   offsetDiffHours = 0,
   labelMode = "top00",
   other,
 }) {
   const hours = Array.from({ length: 25 }, (_, i) => i);
-
   const sUTC = toMinutes(sunrise);
   const eUTC = toMinutes(sunset);
   const sOtherUTC = toMinutes(other.sunriseUTC);
   const eOtherUTC = toMinutes(other.sunsetUTC);
 
-  const pixelsPerHour = 35;
-  const verticalShift = -offsetDiffHours * pixelsPerHour;
-  const totalHeight = 24 * pixelsPerHour + Math.abs(offsetDiffHours) * pixelsPerHour;
-
   const sharedDayStart = Math.max(sUTC, sOtherUTC);
   const sharedDayEnd = Math.min(eUTC, eOtherUTC);
   const sharedNightStart = Math.max(eUTC, eOtherUTC);
   const sharedNightEnd = Math.min(sUTC, sOtherUTC);
+
+  const pixelsPerHour = 35;
+  const verticalShift = -offsetDiffHours * pixelsPerHour;
+  const totalHeight = 24 * pixelsPerHour + Math.abs(offsetDiffHours) * pixelsPerHour;
+
+  // Label base (this tz’s midnight or previous day midnight)
+  const thisMidnightUTC = localMidnightUTC(dateUTC, offsetHours);
+  const labelBaseUTC =
+    labelMode === "bottom00"
+      ? new Date(thisMidnightUTC.getTime() - 24 * 3600 * 1000)
+      : thisMidnightUTC;
 
   const renderSpan = ({ start, end, color, dashed = false, z = 2 }) => {
     const blocks = [];
@@ -189,24 +199,6 @@ function VerticalTimeline({
     return blocks;
   };
 
-  const topFadeColor =
-    offsetDiffHours >= 0
-      ? "linear-gradient(to bottom, rgba(255,224,102,0.3), rgba(255,224,102,0))"
-      : "linear-gradient(to bottom, rgba(169,201,255,0.3), rgba(169,201,255,0))";
-  const bottomFadeColor =
-    offsetDiffHours >= 0
-      ? "linear-gradient(to top, rgba(169,201,255,0.3), rgba(169,201,255,0))"
-      : "linear-gradient(to top, rgba(255,224,102,0.3), rgba(255,224,102,0))";
-
-  // Determine label base:
-  const thisMidnightUTC = localMidnightUTC(dateUTC, offsetDiffHours < 0 ? offsetDiffHours : offsetDiffHours * 0);
-  // Actually use timezone’s offset for label base:
-  const baseOffset = offsetDiffHours < 0 ? offsetDiffHours : 0;
-  const labelBaseUTC =
-    labelMode === "bottom00"
-      ? new Date(thisMidnightUTC.getTime() - 24 * 3600 * 1000)
-      : thisMidnightUTC;
-
   return (
     <div style={{ textAlign: "center" }}>
       <h3 style={{ marginBottom: 2 }}>{label}</h3>
@@ -226,8 +218,8 @@ function VerticalTimeline({
           transition: "transform 0.3s ease",
         }}
       >
+        {/* Local hour grid */}
         {hours.map((h) => {
-          const hh = String(h).padStart(2, "0");
           const tUTC = new Date(labelBaseUTC.getTime() + h * 3600 * 1000);
           const localLabel = tUTC.toLocaleString("en-GB", {
             timeZone: tz,
@@ -263,11 +255,8 @@ function VerticalTimeline({
           );
         })}
 
-        {/* Nighttime */}
         {renderSpan({ start: eUTC, end: sUTC, color: "rgba(169,201,255,0.8)", z: 2 })}
-        {/* Daytime */}
         {renderSpan({ start: sUTC, end: eUTC, color: "rgba(255,224,102,0.8)", z: 3 })}
-
         {sharedDayEnd > sharedDayStart &&
           renderSpan({
             start: sharedDayStart,
@@ -276,7 +265,6 @@ function VerticalTimeline({
             dashed: true,
             z: 4,
           })}
-
         {sharedNightEnd > sharedNightStart &&
           renderSpan({
             start: sharedNightStart,
@@ -285,31 +273,6 @@ function VerticalTimeline({
             dashed: true,
             z: 4,
           })}
-
-        <div
-          style={{
-            position: "absolute",
-            top: `${-Math.max(offsetDiffHours, 0) * pixelsPerHour}px`,
-            left: 0,
-            right: 0,
-            height: `${Math.max(offsetDiffHours, 0) * pixelsPerHour}px`,
-            background: topFadeColor,
-            zIndex: 0,
-            opacity: 0.7,
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            bottom: `${-Math.max(-offsetDiffHours, 0) * pixelsPerHour}px`,
-            left: 0,
-            right: 0,
-            height: `${Math.max(-offsetDiffHours, 0) * pixelsPerHour}px`,
-            background: bottomFadeColor,
-            zIndex: 0,
-            opacity: 0.7,
-          }}
-        />
       </div>
 
       <div style={{ fontSize: 12, marginTop: 4 }}>
@@ -326,7 +289,6 @@ function VerticalTimeline({
 function Summary({ data }) {
   const dayM = data.overlap.daylight.totalMinutes || 0;
   const nightM = data.overlap.nighttime.totalMinutes || 0;
-
   return (
     <div style={{ marginTop: 40, position: "relative", zIndex: 3 }}>
       <div
