@@ -1,24 +1,17 @@
-/* Global styles for FlightOwl */
-body {
-  margin: 0;
-  font-family: system-ui, sans-serif;
-  background: #fafafa;
-  color: #222;
-}
-
-/* --- Colour Tokens --- */
 :root{
-  /* Soft pastels */
-  --day-opaque: #FFEFA6;            /* yellow (opaque)  */
-  --night-opaque: #CFE4FF;          /* blue (opaque)    */
-  --day-faint: rgba(255,239,166,.35);   /* yellow (faint) */
-  --night-faint: rgba(207,228,255,.35); /* blue (faint)   */
+  /* Stronger pastel tones */
+  --day-opaque: #FFE066;            /* brighter yellow */
+  --night-opaque: #A9C9FF;          /* visible blue */
+  --day-faint: rgba(255,224,102,0.35);
+  --night-faint: rgba(169,201,255,0.35);
 
   /* Accents / borders */
-  --chip-day-bg:#FFF7D1;   --chip-day-border:#F3E6A4;
-  --chip-night-bg:#E9EEFF; --chip-night-border:#C9D4FF;
+  --chip-day-bg:#FFF7D1;
+  --chip-day-border:#F3E6A4;
+  --chip-night-bg:#E9EEFF;
+  --chip-night-border:#C9D4FF;
 
-  --axis-bg:#111;          /* bar track */
-  --grid: rgba(255,255,255,0.12);
-  --grid-12: rgba(255,255,255,0.25);
+  --axis-bg:#111;
+  --grid: rgba(0,0,0,0.08);
+  --grid-12: rgba(0,0,0,0.15);
 }
