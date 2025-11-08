@@ -99,19 +99,16 @@ export default function Page() {
    VERTICAL TIMELINE COMPONENT
    =========================================================== */
 function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
-  const hours = Array.from({ length: 25 }, (_, i) => i);
+  // Each column runs 0–24h UTC
+  const hours = Array.from({ length: 13 }, (_, i) => i * 2); // 0, 2, 4...24
 
-  // convert this city's times
-  const sLocal = toMinutes(sunrise);
-  const eLocal = toMinutes(sunset);
+  // Convert sunrise/sunset UTC times into minutes of the UTC day
+  const sUTC = toMinutes(sunrise);
+  const eUTC = toMinutes(sunset);
+  const sOtherUTC = toMinutes(other.sunriseUTC);
+  const eOtherUTC = toMinutes(other.sunsetUTC);
 
-  // convert other city's UTC → this city's local
-  const otherSunriseLocal = formatLocal(other.sunriseUTC, dateUTC, tz);
-  const otherSunsetLocal = formatLocal(other.sunsetUTC, dateUTC, tz);
-  const sOtherLocal = toMinutes(otherSunriseLocal);
-  const eOtherLocal = toMinutes(otherSunsetLocal);
-
-  // helper to draw a block that might cross midnight
+  // Handle wrap-around day
   const renderSpan = ({ start, end, color, dashed = false, z = 2 }) => {
     const blocks = [];
     const push = (a, b) =>
@@ -140,49 +137,30 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
     return blocks;
   };
 
+  // Overlap segments in UTC
+  const sharedDayStart = Math.max(sUTC, sOtherUTC);
+  const sharedDayEnd = Math.min(eUTC, eOtherUTC);
+  const sharedNightStart = Math.max(eUTC, eOtherUTC);
+  const sharedNightEnd = Math.min(sUTC, sOtherUTC);
+
   return (
     <div style={{ textAlign: "center" }}>
-      <h3 style={{ marginBottom: 4 }}>{label}</h3>
-      <p style={{ margin: 0, fontSize: 12, color: "#666" }}>{tz}</p>
+      <h3 style={{ marginBottom: 2 }}>{label}</h3>
+      <p style={{ margin: 0, fontSize: 12, color: "#666" }}>{tz.replace("_", "/")}</p>
 
       <div
         style={{
           position: "relative",
-          height: 440,
-          width: 130,
-          margin: "10px auto",
+          height: 560,
+          width: 140,
+          margin: "20px auto",
+          borderRadius: 10,
           border: "1px solid #ddd",
-          borderRadius: 6,
-          background: "var(--night-opaque)",
+          background: "#fff",
           overflow: "hidden",
         }}
       >
-        {/* Faint band of the other city's daylight */}
-        {renderSpan({
-          start: sOtherLocal,
-          end: eOtherLocal,
-          color: "var(--day-faint)",
-          z: 2,
-        })}
-
-        {/* This city's daylight */}
-        {renderSpan({
-          start: sLocal,
-          end: eLocal,
-          color: "var(--day-opaque)",
-          z: 3,
-        })}
-
-        {/* Orange dashed overlap */}
-        {renderSpan({
-          start: Math.max(sLocal, sOtherLocal),
-          end: Math.min(eLocal, eOtherLocal),
-          color: "rgba(255,165,0,0.15)",
-          dashed: true,
-          z: 4,
-        })}
-
-        {/* Hour grid lines */}
+        {/* Grid lines */}
         {hours.map((h) => (
           <div
             key={h}
@@ -191,27 +169,71 @@ function VerticalTimeline({ label, tz, sunrise, sunset, dateUTC, other }) {
               top: `${(h / 24) * 100}%`,
               left: 0,
               right: 0,
-              borderTop: h % 6 === 0 ? "1px solid #bbb" : "1px solid #eee",
-              fontSize: 10,
-              color: "#666",
-              paddingLeft: 4,
-              display: "flex",
-              alignItems: "center",
+              height: 1,
+              background: "rgba(0,0,0,0.08)",
               zIndex: 1,
             }}
           >
-            {h % 6 === 0 ? `${String(h).padStart(2, "0")}:00` : ""}
+            <span
+              style={{
+                position: "absolute",
+                left: "-36px",
+                top: "-7px",
+                fontSize: 11,
+                color: "#999",
+              }}
+            >
+              {String(h).padStart(2, "0")}:00
+            </span>
           </div>
         ))}
+
+        {/* Nighttime (base blue) */}
+        {renderSpan({
+          start: eUTC,
+          end: sUTC,
+          color: "rgba(169,201,255,0.8)",
+          z: 2,
+        })}
+
+        {/* Daytime (solid yellow) */}
+        {renderSpan({
+          start: sUTC,
+          end: eUTC,
+          color: "rgba(255,224,102,0.8)",
+          z: 3,
+        })}
+
+        {/* Shared Daylight (orange dashed) */}
+        {sharedDayEnd > sharedDayStart &&
+          renderSpan({
+            start: sharedDayStart,
+            end: sharedDayEnd,
+            color: "rgba(255,165,0,0.2)",
+            dashed: true,
+            z: 4,
+          })}
+
+        {/* Shared Night (orange dashed) */}
+        {sharedNightEnd > sharedNightStart &&
+          renderSpan({
+            start: sharedNightStart,
+            end: sharedNightEnd,
+            color: "rgba(255,165,0,0.15)",
+            dashed: true,
+            z: 4,
+          })}
       </div>
 
+      {/* Sunrise / Sunset indicators */}
       <div style={{ fontSize: 12, marginTop: 4 }}>
-        🌅 Sunrise {formatLocal(sunrise, dateUTC, tz)} <br />
-        🌇 Sunset {formatLocal(sunset, dateUTC, tz)}
+        🌅 {sunrise} UTC <br />
+        🌇 {sunset} UTC
       </div>
     </div>
   );
 }
+
 
 /* ===========================================================
    SUMMARY BOXES
