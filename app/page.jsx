@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, zonedTimeToUtc } from "date-fns-tz";
 import "./globals.css";
 
 /* ===========================================================
@@ -51,68 +51,66 @@ export default function Page() {
         </button>
       </form>
 
-      {data && (
-        (() => {
-          const offsetA =
-            data.from.utc_offset_hours ??
-            data.from.offsetHours ??
-            data.from.utcOffset ??
-            0;
-          const offsetB =
-            data.to.utc_offset_hours ??
-            data.to.offsetHours ??
-            data.to.utcOffset ??
-            0;
-          const offsetDiffHours = offsetB - offsetA;
+      {data && (() => {
+        const offsetA =
+          data.from.utc_offset_hours ??
+          data.from.offsetHours ??
+          data.from.utcOffset ??
+          0;
+        const offsetB =
+          data.to.utc_offset_hours ??
+          data.to.offsetHours ??
+          data.to.utcOffset ??
+          0;
+        const offsetDiffHours = offsetB - offsetA;
 
-          return (
-            <>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "flex-start",
-                  gap: 60,
-                  position: "relative",
-                  zIndex: 2,
+        return (
+          <>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "flex-start",
+                gap: 60,
+                position: "relative",
+                zIndex: 2,
+              }}
+            >
+              {/* Left timeline (reference) */}
+              <VerticalTimeline
+                label={data.from.name}
+                tz={data.from.timezone}
+                sunrise={data.from.todayUTC.sunrise}
+                sunset={data.from.todayUTC.sunset}
+                dateUTC={data.meta.dateUTC}
+                offsetDiffHours={0}
+                other={{
+                  label: data.to.name,
+                  sunriseUTC: data.to.todayUTC.sunrise,
+                  sunsetUTC: data.to.todayUTC.sunset,
                 }}
-              >
-                {/* Left timeline (reference) */}
-                <VerticalTimeline
-                  label={data.from.name}
-                  tz={data.from.timezone}
-                  sunrise={data.from.todayUTC.sunrise}
-                  sunset={data.from.todayUTC.sunset}
-                  dateUTC={data.meta.dateUTC}
-                  offsetDiffHours={0}
-                  other={{
-                    label: data.to.name,
-                    sunriseUTC: data.to.todayUTC.sunrise,
-                    sunsetUTC: data.to.todayUTC.sunset,
-                  }}
-                />
+              />
 
-                {/* Right timeline (shifted) */}
-                <VerticalTimeline
-                  label={data.to.name}
-                  tz={data.to.timezone}
-                  sunrise={data.to.todayUTC.sunrise}
-                  sunset={data.to.todayUTC.sunset}
-                  dateUTC={data.meta.dateUTC}
-                  offsetDiffHours={offsetDiffHours}
-                  other={{
-                    label: data.from.name,
-                    sunriseUTC: data.from.todayUTC.sunrise,
-                    sunsetUTC: data.from.todayUTC.sunset,
-                  }}
-                />
-              </div>
+              {/* Right timeline (shifted) */}
+              <VerticalTimeline
+                label={data.to.name}
+                tz={data.to.timezone}
+                sunrise={data.to.todayUTC.sunrise}
+                sunset={data.to.todayUTC.sunset}
+                dateUTC={data.meta.dateUTC}
+                offsetDiffHours={offsetDiffHours}
+                other={{
+                  label: data.from.name,
+                  sunriseUTC: data.from.todayUTC.sunrise,
+                  sunsetUTC: data.from.todayUTC.sunset,
+                }}
+              />
+            </div>
 
-              <Summary data={data} />
-            </>
-          );
-        })()
-      )}
+            <Summary data={data} />
+          </>
+        );
+      })()}
     </div>
   );
 }
@@ -130,10 +128,21 @@ function VerticalTimeline({
   offsetDiffHours = 0,
 }) {
   const hours = Array.from({ length: 25 }, (_, i) => i);
+
   const sUTC = toMinutes(sunrise);
   const eUTC = toMinutes(sunset);
   const sOtherUTC = toMinutes(other.sunriseUTC);
   const eOtherUTC = toMinutes(other.sunsetUTC);
+
+  /* Calculate proper visual offset using local midnights */
+  const localMidnight = zonedTimeToUtc(`${dateUTC}T00:00:00`, tz);
+  const otherMidnight = zonedTimeToUtc(`${dateUTC}T00:00:00`, other.tz || "UTC");
+  const offsetHoursReal =
+    (otherMidnight.getTime() - localMidnight.getTime()) / (1000 * 60 * 60);
+
+  const pixelsPerHour = 35;
+  const verticalShift = -offsetHoursReal * pixelsPerHour;
+  const totalHeight = 24 * pixelsPerHour + Math.abs(offsetHoursReal) * pixelsPerHour;
 
   const renderSpan = ({ start, end, color, dashed = false, z = 2 }) => {
     const blocks = [];
@@ -167,10 +176,6 @@ function VerticalTimeline({
   const sharedNightStart = Math.max(eUTC, eOtherUTC);
   const sharedNightEnd = Math.min(sUTC, sOtherUTC);
 
-  const pixelsPerHour = 35;
-  const verticalShift = -offsetDiffHours * pixelsPerHour;
-  const totalHeight = 24 * pixelsPerHour + Math.abs(offsetDiffHours) * pixelsPerHour;
-
   const topFadeColor =
     offsetDiffHours >= 0
       ? "linear-gradient(to bottom, rgba(255,224,102,0.3), rgba(255,224,102,0))"
@@ -199,11 +204,11 @@ function VerticalTimeline({
           transition: "transform 0.3s ease",
         }}
       >
-        {/* Hour grid using ACTUAL selected date */}
+        {/* Local midnight → midnight grid */}
         {hours.map((h) => {
           const hh = String(h).padStart(2, "0");
-          const utcDate = new Date(`${dateUTC}T${hh}:00:00Z`);
-          const localLabel = formatInTimeZone(utcDate, tz, "HH:mm");
+          const localTime = new Date(`${dateUTC}T${hh}:00:00`);
+          const labelTime = formatInTimeZone(localTime, tz, "HH:mm");
           return (
             <div
               key={h}
@@ -226,7 +231,7 @@ function VerticalTimeline({
                   color: "#999",
                 }}
               >
-                {localLabel}
+                {labelTime}
               </span>
             </div>
           );
@@ -248,7 +253,7 @@ function VerticalTimeline({
           z: 3,
         })}
 
-        {/* Shared Day */}
+        {/* Shared daylight */}
         {sharedDayEnd > sharedDayStart &&
           renderSpan({
             start: sharedDayStart,
@@ -258,7 +263,7 @@ function VerticalTimeline({
             z: 4,
           })}
 
-        {/* Shared Night */}
+        {/* Shared night */}
         {sharedNightEnd > sharedNightStart &&
           renderSpan({
             start: sharedNightStart,
@@ -268,28 +273,26 @@ function VerticalTimeline({
             z: 4,
           })}
 
-        {/* Previous day band */}
+        {/* Fade bands */}
         <div
           style={{
             position: "absolute",
-            top: `${-Math.max(offsetDiffHours, 0) * pixelsPerHour}px`,
+            top: `${-Math.max(offsetHoursReal, 0) * pixelsPerHour}px`,
             left: 0,
             right: 0,
-            height: `${Math.max(offsetDiffHours, 0) * pixelsPerHour}px`,
+            height: `${Math.max(offsetHoursReal, 0) * pixelsPerHour}px`,
             background: topFadeColor,
             zIndex: 0,
             opacity: 0.7,
           }}
         />
-
-        {/* Next day band */}
         <div
           style={{
             position: "absolute",
-            bottom: `${-Math.max(-offsetDiffHours, 0) * pixelsPerHour}px`,
+            bottom: `${-Math.max(-offsetHoursReal, 0) * pixelsPerHour}px`,
             left: 0,
             right: 0,
-            height: `${Math.max(-offsetDiffHours, 0) * pixelsPerHour}px`,
+            height: `${Math.max(-offsetHoursReal, 0) * pixelsPerHour}px`,
             background: bottomFadeColor,
             zIndex: 0,
             opacity: 0.7,
