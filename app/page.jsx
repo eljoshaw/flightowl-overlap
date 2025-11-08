@@ -132,7 +132,6 @@ function VerticalTimeline({
   const sOtherUTC = toMinutes(other.sunriseUTC);
   const eOtherUTC = toMinutes(other.sunsetUTC);
 
-  // Rendering helper
   const renderSpan = ({ start, end, color, dashed = false, z = 2 }) => {
     const blocks = [];
     const push = (a, b) =>
@@ -152,7 +151,6 @@ function VerticalTimeline({
           }}
         />
       );
-
     if (end > start) push(start, end);
     else {
       push(start, 1440);
@@ -166,11 +164,22 @@ function VerticalTimeline({
   const sharedNightStart = Math.max(eUTC, eOtherUTC);
   const sharedNightEnd = Math.min(sUTC, sOtherUTC);
 
-  // Vertical shift + dynamic height
+  // Dynamic sizing and position
   const pixelsPerHour = 20;
   const verticalShift = -offsetDiffHours * pixelsPerHour; // east = up, west = down
   const totalHeight =
-    24 * pixelsPerHour + Math.abs(offsetDiffHours) * pixelsPerHour; // make space for faint parts
+    24 * pixelsPerHour + Math.abs(offsetDiffHours) * pixelsPerHour;
+
+  // Fade direction flips automatically based on shift
+  const topFadeColor =
+    offsetDiffHours >= 0
+      ? "linear-gradient(to bottom, rgba(255,224,102,0.3), rgba(255,224,102,0))"
+      : "linear-gradient(to bottom, rgba(169,201,255,0.3), rgba(169,201,255,0))";
+
+  const bottomFadeColor =
+    offsetDiffHours >= 0
+      ? "linear-gradient(to top, rgba(169,201,255,0.3), rgba(169,201,255,0))"
+      : "linear-gradient(to top, rgba(255,224,102,0.3), rgba(255,224,102,0))";
 
   return (
     <div style={{ textAlign: "center" }}>
@@ -191,6 +200,7 @@ function VerticalTimeline({
           transition: "transform 0.3s ease",
         }}
       >
+        {/* Hour grid */}
         {hours.map((h) => (
           <div
             key={h}
@@ -253,6 +263,32 @@ function VerticalTimeline({
             dashed: true,
             z: 4,
           })}
+
+        {/* Faint previous-day top band */}
+        <div
+          style={{
+            position: "absolute",
+            top: "-10%",
+            left: 0,
+            right: 0,
+            height: "10%",
+            background: topFadeColor,
+            zIndex: 0,
+          }}
+        />
+
+        {/* Faint next-day bottom band */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: "-10%",
+            left: 0,
+            right: 0,
+            height: "10%",
+            background: bottomFadeColor,
+            zIndex: 0,
+          }}
+        />
       </div>
 
       <div style={{ fontSize: 12, marginTop: 4 }}>
