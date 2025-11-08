@@ -1,16 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { formatInTimeZone } from "date-fns-tz";
 import "./globals.css";
 
 /* ===========================================================
-   PAGE
+   MAIN PAGE
    =========================================================== */
 export default function Page() {
   const [data, setData] = useState(null);
-  const [from, setFrom] = useState("LHR");
-  const [to, setTo] = useState("SIN");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [date, setDate] = useState("");
 
   async function handleSubmit(e) {
@@ -21,61 +20,69 @@ export default function Page() {
   }
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: 20 }}>
-      <h1 style={{ fontWeight: 800, marginBottom: 16 }}>FlightOwl Light Overlap</h1>
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: 20 }}>
+      <h1 style={{ fontWeight: 700, marginBottom: 12 }}>
+        FlightOwl Light Overlap
+      </h1>
 
       <form
         onSubmit={handleSubmit}
-        style={{ marginBottom: 20, display: "flex", gap: 10, flexWrap: "wrap" }}
+        style={{ marginBottom: 24, display: "flex", gap: 8, flexWrap: "wrap" }}
       >
         <input
           placeholder="From (e.g. LHR)"
           value={from}
           onChange={(e) => setFrom(e.target.value.toUpperCase())}
-          style={{ padding: 10 }}
+          style={{ padding: 8 }}
         />
         <input
           placeholder="To (e.g. SIN)"
           value={to}
           onChange={(e) => setTo(e.target.value.toUpperCase())}
-          style={{ padding: 10 }}
+          style={{ padding: 8 }}
         />
         <input
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          style={{ padding: 10 }}
+          style={{ padding: 8 }}
         />
-        <button type="submit" style={{ padding: "10px 14px" }}>
+        <button type="submit" style={{ padding: "8px 12px" }}>
           Show overlap
         </button>
       </form>
 
-      {data && <TimelinePair data={data} />}
+      {data && <TimelineComparison data={data} />}
     </div>
   );
 }
 
 /* ===========================================================
-   TIMELINE PAIR LOGIC
+   TIMELINE COMPARISON
    =========================================================== */
-function TimelinePair({ data }) {
-  const offA =
-    data.from.utc_offset_hours ?? data.from.offsetHours ?? data.from.utcOffset ?? 0;
-  const offB =
-    data.to.utc_offset_hours ?? data.to.offsetHours ?? data.to.utcOffset ?? 0;
+function TimelineComparison({ data }) {
+  const offsetA =
+    data.from.utc_offset_hours ??
+    data.from.offsetHours ??
+    data.from.utcOffset ??
+    0;
+  const offsetB =
+    data.to.utc_offset_hours ??
+    data.to.offsetHours ??
+    data.to.utcOffset ??
+    0;
 
   const dateUTC = data.meta.dateUTC;
-  const midA = localMidnightUTC(dateUTC, offA);
-  const midB = localMidnightUTC(dateUTC, offB);
+  const utcMidA = localMidnightUTC(dateUTC, offsetA);
+  const utcMidB = localMidnightUTC(dateUTC, offsetB);
 
-  // earlier midnight -> starts at top; later midnight -> ends at bottom
-  const aEarlier = midA.getTime() <= midB.getTime();
+  const aComesFirst = utcMidA.getTime() < utcMidB.getTime();
 
-  const first = aEarlier ? data.from : data.to;
-  const second = aEarlier ? data.to : data.from;
-  const firstOffset = aEarlier ? offA : offB;
-  const secondOffset = aEarlier ? offB : offA;
+  const left = aComesFirst ? data.from : data.to;
+  const right = aComesFirst ? data.to : data.from;
+  const offsetLeft = aComesFirst ? offsetA : offsetB;
+  const offsetRight = aComesFirst ? offsetB : offsetA;
+  const offsetDiff = offsetRight - offsetLeft;
 
   return (
     <>
@@ -85,21 +92,43 @@ function TimelinePair({ data }) {
           justifyContent: "center",
           alignItems: "flex-start",
           gap: 60,
+          position: "relative",
+          zIndex: 2,
         }}
       >
-        <Timeline
-          airport={first}
-          offsetHours={firstOffset}
+        {/* Left: starts at 00:00 */}
+        <VerticalTimeline
+          label={left.name}
+          tz={left.timezone}
+          sunrise={left.todayUTC.sunrise}
+          sunset={left.todayUTC.sunset}
           dateUTC={dateUTC}
-          anchor="start"
-          other={second}
+          offsetHours={offsetLeft}
+          offsetDiffHours={0}
+          labelMode="top00"
+          other={{
+            label: right.name,
+            tz: right.timezone,
+            sunriseUTC: right.todayUTC.sunrise,
+            sunsetUTC: right.todayUTC.sunset,
+          }}
         />
-        <Timeline
-          airport={second}
-          offsetHours={secondOffset}
+        {/* Right: ends at 00:00 */}
+        <VerticalTimeline
+          label={right.name}
+          tz={right.timezone}
+          sunrise={right.todayUTC.sunrise}
+          sunset={right.todayUTC.sunset}
           dateUTC={dateUTC}
-          anchor="end"
-          other={first}
+          offsetHours={offsetRight}
+          offsetDiffHours={offsetDiff}
+          labelMode="bottom00"
+          other={{
+            label: left.name,
+            tz: left.timezone,
+            sunriseUTC: left.todayUTC.sunrise,
+            sunsetUTC: left.todayUTC.sunset,
+          }}
         />
       </div>
       <Summary data={data} />
@@ -108,122 +137,47 @@ function TimelinePair({ data }) {
 }
 
 /* ===========================================================
-   SINGLE TIMELINE COMPONENT
+   VERTICAL TIMELINE COMPONENT
    =========================================================== */
-function Timeline({ airport, offsetHours, dateUTC, anchor, other }) {
-  const tz = airport.timezone;
-  const sunrise = airport.todayUTC.sunrise;
-  const sunset = airport.todayUTC.sunset;
+function VerticalTimeline({
+  label,
+  tz,
+  sunrise,
+  sunset,
+  dateUTC,
+  offsetHours,
+  offsetDiffHours = 0,
+  labelMode = "top00",
+  other,
+}) {
+  const hours = Array.from({ length: 25 }, (_, i) => i);
   const sUTC = toMinutes(sunrise);
   const eUTC = toMinutes(sunset);
-
-  const sOtherUTC = toMinutes(other.todayUTC.sunrise);
-  const eOtherUTC = toMinutes(other.todayUTC.sunset);
+  const sOtherUTC = toMinutes(other.sunriseUTC);
+  const eOtherUTC = toMinutes(other.sunsetUTC);
 
   const sharedDayStart = Math.max(sUTC, sOtherUTC);
   const sharedDayEnd = Math.min(eUTC, eOtherUTC);
   const sharedNightStart = Math.max(eUTC, eOtherUTC);
   const sharedNightEnd = Math.min(sUTC, sOtherUTC);
 
-  const PPH = 35;
-  const TRACK_H = 24 * PPH;
+  const pixelsPerHour = 35;
+  const verticalShift = -offsetDiffHours * pixelsPerHour;
+  const totalHeight = 24 * pixelsPerHour + Math.abs(offsetDiffHours) * pixelsPerHour;
 
-  const midUTC = localMidnightUTC(dateUTC, offsetHours);
-  const shiftY = anchor === "start" ? -offsetHours * PPH : (24 - offsetHours) * PPH;
-
-  const hours = Array.from({ length: 25 }, (_, i) => i);
+  // Label base (this tz’s midnight or previous day midnight)
+  const thisMidnightUTC = localMidnightUTC(dateUTC, offsetHours);
   const labelBaseUTC =
-    anchor === "end" ? addHours(midUTC, 24) : midUTC;
+    labelMode === "bottom00"
+      ? new Date(thisMidnightUTC.getTime() - 24 * 3600 * 1000)
+      : thisMidnightUTC;
 
-  return (
-    <div style={{ textAlign: "center" }}>
-      <h3 style={{ marginBottom: 2 }}>{airport.name}</h3>
-      <p style={{ margin: 0, fontSize: 12, color: "#666" }}>{tz.replace("_", "/")}</p>
-
-      <div
-        style={{
-          position: "relative",
-          width: 150,
-          height: TRACK_H,
-          borderRadius: 10,
-          border: "1px solid #ddd",
-          overflow: "hidden",
-          background: "#fff",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            transform: `translateY(${shiftY}px)`,
-            transition: "transform 0.3s ease",
-          }}
-        >
-          {/* Hour grid */}
-          {hours.map((h) => {
-            const tickUTC = addHours(labelBaseUTC, h);
-            const label = formatInTimeZone(tickUTC, tz, "HH:mm");
-            return (
-              <div
-                key={h}
-                style={{
-                  position: "absolute",
-                  top: `${(h / 24) * 100}%`,
-                  left: 0,
-                  right: 0,
-                  height: 1,
-                  background: "rgba(0,0,0,0.06)",
-                }}
-              >
-                <span
-                  style={{
-                    position: "absolute",
-                    left: "-44px",
-                    top: "-7px",
-                    fontSize: 11,
-                    color: "#999",
-                  }}
-                >
-                  {label}
-                </span>
-              </div>
-            );
-          })}
-
-          {/* Night */}
-          {renderSpan({ start: eUTC, end: sUTC, color: "rgba(169,201,255,0.85)" })}
-          {/* Day */}
-          {renderSpan({ start: sUTC, end: eUTC, color: "rgba(255,224,102,0.85)" })}
-          {/* Shared Day */}
-          {sharedDayEnd > sharedDayStart &&
-            renderSpan({
-              start: sharedDayStart,
-              end: sharedDayEnd,
-              color: "rgba(255,165,0,0.18)",
-            })}
-          {/* Shared Night */}
-          {sharedNightEnd > sharedNightStart &&
-            renderSpan({
-              start: sharedNightStart,
-              end: sharedNightEnd,
-              color: "rgba(169,201,255,0.12)",
-            })}
-        </div>
-      </div>
-
-      <div style={{ fontSize: 12, marginTop: 6 }}>
-        🌅 {sunrise} UTC <br />
-        🌇 {sunset} UTC
-      </div>
-    </div>
-  );
-
-  function renderSpan({ start, end, color }) {
+  const renderSpan = ({ start, end, color, dashed = false, z = 2 }) => {
     const blocks = [];
     const push = (a, b) =>
       blocks.push(
         <div
-          key={`${a}-${b}-${color}`}
+          key={`${a}-${b}-${color}-${dashed}`}
           style={{
             position: "absolute",
             top: `${(a / 1440) * 100}%`,
@@ -231,7 +185,9 @@ function Timeline({ airport, offsetHours, dateUTC, anchor, other }) {
             left: 0,
             right: 0,
             background: color,
+            border: dashed ? "2px dashed orange" : "none",
             borderRadius: 6,
+            zIndex: z,
           }}
         />
       );
@@ -241,18 +197,100 @@ function Timeline({ airport, offsetHours, dateUTC, anchor, other }) {
       push(0, end);
     }
     return blocks;
-  }
+  };
+
+  return (
+    <div style={{ textAlign: "center" }}>
+      <h3 style={{ marginBottom: 2 }}>{label}</h3>
+      <p style={{ margin: 0, fontSize: 12, color: "#666" }}>{tz.replace("_", "/")}</p>
+
+      <div
+        style={{
+          position: "relative",
+          height: totalHeight,
+          width: 140,
+          margin: "20px auto",
+          borderRadius: 10,
+          border: "1px solid #ddd",
+          background: "#fff",
+          overflow: "visible",
+          transform: `translateY(${verticalShift}px)`,
+          transition: "transform 0.3s ease",
+        }}
+      >
+        {/* Local hour grid */}
+        {hours.map((h) => {
+          const tUTC = new Date(labelBaseUTC.getTime() + h * 3600 * 1000);
+          const localLabel = tUTC.toLocaleString("en-GB", {
+            timeZone: tz,
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          });
+          return (
+            <div
+              key={h}
+              style={{
+                position: "absolute",
+                top: `${(h / 24) * 100}%`,
+                left: 0,
+                right: 0,
+                height: 1,
+                background: "rgba(0,0,0,0.08)",
+                zIndex: 1,
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  left: "-44px",
+                  top: "-7px",
+                  fontSize: 11,
+                  color: "#999",
+                }}
+              >
+                {localLabel}
+              </span>
+            </div>
+          );
+        })}
+
+        {renderSpan({ start: eUTC, end: sUTC, color: "rgba(169,201,255,0.8)", z: 2 })}
+        {renderSpan({ start: sUTC, end: eUTC, color: "rgba(255,224,102,0.8)", z: 3 })}
+        {sharedDayEnd > sharedDayStart &&
+          renderSpan({
+            start: sharedDayStart,
+            end: sharedDayEnd,
+            color: "rgba(255,165,0,0.18)",
+            dashed: true,
+            z: 4,
+          })}
+        {sharedNightEnd > sharedNightStart &&
+          renderSpan({
+            start: sharedNightStart,
+            end: sharedNightEnd,
+            color: "rgba(255,165,0,0.12)",
+            dashed: true,
+            z: 4,
+          })}
+      </div>
+
+      <div style={{ fontSize: 12, marginTop: 4 }}>
+        🌅 {sunrise} UTC <br />
+        🌇 {sunset} UTC
+      </div>
+    </div>
+  );
 }
 
 /* ===========================================================
-   SUMMARY
+   SUMMARY BOXES
    =========================================================== */
 function Summary({ data }) {
   const dayM = data.overlap.daylight.totalMinutes || 0;
   const nightM = data.overlap.nighttime.totalMinutes || 0;
-
   return (
-    <div style={{ marginTop: 30 }}>
+    <div style={{ marginTop: 40, position: "relative", zIndex: 3 }}>
       <div
         style={{
           padding: 12,
@@ -288,13 +326,7 @@ function toMinutes(hhmm) {
 }
 
 function localMidnightUTC(dateUTC, offsetHours) {
-  const d = new Date(`${dateUTC}T00:00:00Z`);
-  d.setUTCHours(d.getUTCHours() - offsetHours);
-  return d;
-}
-
-function addHours(date, h) {
-  const d = new Date(date);
-  d.setUTCHours(d.getUTCHours() + h);
-  return d;
+  const utc = new Date(`${dateUTC}T00:00:00Z`);
+  utc.setUTCHours(utc.getUTCHours() - offsetHours);
+  return utc;
 }
