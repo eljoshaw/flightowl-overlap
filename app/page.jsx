@@ -314,6 +314,30 @@ function VerticalTimeline({
             opacity: 0.7,
           }}
         />
+
+      </div> {/* close the main timeline box */}
+
+      {/* Sunrise / Sunset info */}
+      <div style={{ fontSize: 12, marginTop: 4 }}>
+        🌅 {sunrise} UTC <br />
+        🌇 {sunset} UTC
+      </div>
+    </div>
+  );
+}
+        {/* Dynamic next-day bottom band */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: `${-Math.max(-offsetDiffHours, 0) * pixelsPerHour}px`,
+            left: 0,
+            right: 0,
+            height: `${Math.max(-offsetDiffHours, 0) * pixelsPerHour}px`,
+            background: bottomFadeColor,
+            zIndex: 0,
+            opacity: 0.7,
+          }}
+        />
       </div>
 
       {/* Sunrise / Sunset info */}
