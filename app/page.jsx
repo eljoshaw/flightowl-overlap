@@ -71,14 +71,15 @@ export default function Page() {
           return (
             <>
               <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "flex-start",
-                  gap: 60,
-                  height: 520,
-                }}
-              >
+  style={{
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    gap: 60,
+    position: "relative",
+    zIndex: 2,
+  }}
+>
                 {/* Left timeline (reference timezone) */}
                 <VerticalTimeline
                   label={data.from.name}
@@ -312,7 +313,7 @@ function Summary({ data }) {
   const nightM = data.overlap.nighttime.totalMinutes || 0;
 
   return (
-    <div style={{ marginTop: 24 }}>
+    <div style={{ marginTop: 40, position: "relative", zIndex: 3 }}>
       <div
         style={{
           padding: 12,
