@@ -51,64 +51,63 @@ export default function Page() {
         </button>
       </form>
 
-      {data && (
-        <>
-          {/* STEP 1: Calculate timezone offset difference */}
-          {(() => {
-            const offsetA =
-              data.from.utc_offset_hours ??
-              data.from.offsetHours ??
-              data.from.utcOffset ??
-              0;
-            const offsetB =
-              data.to.utc_offset_hours ??
-              data.to.offsetHours ??
-              data.to.utcOffset ??
-              0;
-            var offsetDiffHours = offsetB - offsetA;
-            return null;
-          })()}
+      {data && (() => {
+        // Calculate timezone offset difference safely
+        const offsetA =
+          data.from.utc_offset_hours ??
+          data.from.offsetHours ??
+          data.from.utcOffset ??
+          0;
+        const offsetB =
+          data.to.utc_offset_hours ??
+          data.to.offsetHours ??
+          data.to.utcOffset ??
+          0;
+        const offsetDiffHours = offsetB - offsetA;
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "flex-start",
-              gap: 60,
-              height: 520,
-            }}
-          >
-            <VerticalTimeline
-              label={data.from.name}
-              tz={data.from.timezone}
-              sunrise={data.from.todayUTC.sunrise}
-              sunset={data.from.todayUTC.sunset}
-              dateUTC={data.meta.dateUTC}
-              offsetDiffHours={offsetDiffHours}
-              other={{
-                label: data.to.name,
-                sunriseUTC: data.to.todayUTC.sunrise,
-                sunsetUTC: data.to.todayUTC.sunset,
+        return (
+          <>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "flex-start",
+                gap: 60,
+                height: 520,
               }}
-            />
-            <VerticalTimeline
-              label={data.to.name}
-              tz={data.to.timezone}
-              sunrise={data.to.todayUTC.sunrise}
-              sunset={data.to.todayUTC.sunset}
-              dateUTC={data.meta.dateUTC}
-              offsetDiffHours={offsetDiffHours}
-              other={{
-                label: data.from.name,
-                sunriseUTC: data.from.todayUTC.sunrise,
-                sunsetUTC: data.from.todayUTC.sunset,
-              }}
-            />
-          </div>
+            >
+              <VerticalTimeline
+                label={data.from.name}
+                tz={data.from.timezone}
+                sunrise={data.from.todayUTC.sunrise}
+                sunset={data.from.todayUTC.sunset}
+                dateUTC={data.meta.dateUTC}
+                offsetDiffHours={offsetDiffHours}
+                other={{
+                  label: data.to.name,
+                  sunriseUTC: data.to.todayUTC.sunrise,
+                  sunsetUTC: data.to.todayUTC.sunset,
+                }}
+              />
+              <VerticalTimeline
+                label={data.to.name}
+                tz={data.to.timezone}
+                sunrise={data.to.todayUTC.sunrise}
+                sunset={data.to.todayUTC.sunset}
+                dateUTC={data.meta.dateUTC}
+                offsetDiffHours={offsetDiffHours}
+                other={{
+                  label: data.from.name,
+                  sunriseUTC: data.from.todayUTC.sunrise,
+                  sunsetUTC: data.from.todayUTC.sunset,
+                }}
+              />
+            </div>
 
-          <Summary data={data} />
-        </>
-      )}
+            <Summary data={data} />
+          </>
+        );
+      })()}
     </div>
   );
 }
