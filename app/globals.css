@@ -9,12 +9,23 @@ body {
   padding: 2rem;
 }
 
-:root {
+  :root {
+  /* existing */
   --day-opaque: #FFE066;
   --night-opaque: #A9C9FF;
-  --day-faint: rgba(255, 224, 102, 0.3);
-  --night-faint: rgba(169, 201, 255, 0.3);
+  --day-faint: rgba(255, 224, 102, 0.30);
+  --night-faint: rgba(169, 201, 255, 0.30);
   --overlap-border: #ff7b00;
+
+  /* add these */
+  --chip-day-bg: rgba(255, 224, 102, 0.18);
+  --chip-day-border: rgba(255, 224, 102, 0.60);
+  --chip-night-bg: rgba(169, 201, 255, 0.18);
+  --chip-night-border: rgba(169, 201, 255, 0.60);
+
+  --grid-line: rgba(0,0,0,0.06);
+}
+
 }
 
 /* Layout */
