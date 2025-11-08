@@ -166,9 +166,11 @@ function VerticalTimeline({
   const sharedNightStart = Math.max(eUTC, eOtherUTC);
   const sharedNightEnd = Math.min(sUTC, sOtherUTC);
 
-  // Vertical shift (px per hour)
+  // Vertical shift + dynamic height
   const pixelsPerHour = 20;
   const verticalShift = -offsetDiffHours * pixelsPerHour; // east = up, west = down
+  const totalHeight =
+    24 * pixelsPerHour + Math.abs(offsetDiffHours) * pixelsPerHour; // make space for faint parts
 
   return (
     <div style={{ textAlign: "center" }}>
@@ -178,7 +180,7 @@ function VerticalTimeline({
       <div
         style={{
           position: "relative",
-          height: 560,
+          height: totalHeight,
           width: 140,
           margin: "20px auto",
           borderRadius: 10,
