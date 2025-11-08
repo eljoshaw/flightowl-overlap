@@ -5,3 +5,19 @@ body {
   background: #fafafa;
   color: #222;
 }
+
+:root{
+  /* Soft pastels */
+  --day-opaque: #FFEFA6;            /* yellow (opaque)  */
+  --night-opaque: #CFE4FF;          /* blue (opaque)    */
+  --day-faint: rgba(255,239,166,.35);   /* yellow (faint) */
+  --night-faint: rgba(207,228,255,.35); /* blue (faint)   */
+
+  /* Accents / borders */
+  --chip-day-bg:#FFF7D1;   --chip-day-border:#F3E6A4;
+  --chip-night-bg:#E9EEFF; --chip-night-border:#C9D4FF;
+
+  --axis-bg:#111;          /* bar track */
+  --grid: rgba(255,255,255,0.12);
+  --grid-12: rgba(255,255,255,0.25);
+}
