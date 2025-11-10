@@ -65,6 +65,7 @@ function buildContinuousIntervals(sunResultsYesterday, sunResultsToday, sunResul
 }
 
 // ---------- find overlap segments across 3 days (with UTC + local times) ----------
+// ---------- find overlap segments across 3 days (with UTC + local times + offsets) ----------
 function findOverlapSegments(intervalsA, intervalsB, d0, fromTZ, toTZ) {
   const rawSegments = [];
 
@@ -92,18 +93,34 @@ function findOverlapSegments(intervalsA, intervalsB, d0, fromTZ, toTZ) {
   }
   merged.push(cur);
 
+  // Helper: get numeric UTC offset in hours for a given timezone/date
+  const getOffsetHours = (tz, dateObj) => {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      timeZoneName: 'shortOffset',
+    }).formatToParts(dateObj);
+    const part = fmt.find(p => p.type === 'timeZoneName')?.value || 'UTC';
+    const match = part.match(/([+-]\d{2})(?::?(\d{2}))?/);
+    if (!match) return 0;
+    const hours = parseInt(match[1], 10);
+    const mins = match[2] ? parseInt(match[2], 10) : 0;
+    return hours + mins / 60;
+  };
+
   // Convert to UTC + local datetime segments
   const total = merged.reduce((sum, [s, e]) => sum + (e - s), 0);
   const segments = merged.map(([s, e]) => {
     const startUTCDate = new Date(d0.getTime() + s * 60000);
     const endUTCDate = new Date(d0.getTime() + e * 60000);
 
-    // Format helper
     const fmtLocal = (d, tz) =>
       d.toLocaleString('sv-SE', {
         timeZone: tz,
         timeZoneName: 'shortOffset',
-      }).replace(' ', 'T'); // ISO-like style
+      }).replace(' ', 'T'); // ISO-like format
+
+    const fromOffset = getOffsetHours(fromTZ, startUTCDate);
+    const toOffset = getOffsetHours(toTZ, startUTCDate);
 
     return {
       startUTC: startUTCDate.toISOString(),
@@ -112,7 +129,10 @@ function findOverlapSegments(intervalsA, intervalsB, d0, fromTZ, toTZ) {
       fromStartLocal: fmtLocal(startUTCDate, fromTZ),
       fromEndLocal: fmtLocal(endUTCDate, fromTZ),
       toStartLocal: fmtLocal(startUTCDate, toTZ),
-      toEndLocal: fmtLocal(endUTCDate, toTZ)
+      toEndLocal: fmtLocal(endUTCDate, toTZ),
+      fromOffsetHours: fromOffset,
+      toOffsetHours: toOffset,
+      spansMidnightUTC: startUTCDate.getUTCDate() !== endUTCDate.getUTCDate()
     };
   });
 
@@ -122,7 +142,6 @@ function findOverlapSegments(intervalsA, intervalsB, d0, fromTZ, toTZ) {
     segments
   };
 }
-
 
 // ---------- fetch airport ----------
 async function getAirportByIATA(iata) {
