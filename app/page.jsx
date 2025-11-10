@@ -127,6 +127,19 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
  * - overlay "day" blocks positioned absolutely by UTC time within window
  * - labels: city code, top/bottom local time range
  */
+
+// Convert local midnight in a given timezone to its UTC instant
+function getLocalMidnightUTC(dateStr, tz) {
+  const localMidnight = new Date(`${dateStr}T00:00:00`);
+  const offsetMs = localMidnight.getTimezoneOffset() * 60000;
+  const utcApprox = new Date(localMidnight.getTime() + offsetMs);
+  // Adjust for the target tz, not the server’s environment
+  const tzOffset =
+    new Date(utcApprox.toLocaleString('en-US', { timeZone: tz })).getTime() -
+    utcApprox.getTime();
+  return new Date(utcApprox.getTime() - tzOffset);
+}
+
     function CityColumn({ title, tz, sunTimes, utcWindowStart, utcWindowEnd, heightPx, pxPerMs, side = 'left' }) {
       // --- build daylight intervals ---
       const daylight = useMemo(
@@ -140,7 +153,7 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
       const sunset = mainDay ? new Date(mainDay.sunsetUTC) : null;
     
       // --- compute local midnight for that day in this tz ---
-      const localMidnight = mainDay ? new Date(`${mainDay.date}T00:00:00Z`) : null;
+      const localMidnight = mainDay ? getLocalMidnightUTC(mainDay.date, tz) : null;
     
       // --- convert to vertical positions ---
       const posFor = (dt) => (dt ? (dt.getTime() - utcWindowStart.getTime()) * pxPerMs : null);
@@ -204,8 +217,8 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
       const labels = (
         <>
           {[{ y: yMidnight, dt: localMidnight, icon: '🕛', text: 'midnight' },
-            { y: ySunrise, dt: sunrise, icon: '🌅', text: 'sunrise' },
-            { y: ySunset, dt: sunset, icon: '🌇', text: 'sunset' }]
+            { y: ySunrise, dt: sunrise, icon: '☀️', text: 'sunrise' },
+            { y: ySunset, dt: sunset, icon: '🌙', text: 'sunset' }]
             .filter(ev => ev.y !== null && ev.y >= 0 && ev.y <= heightPx)
             .map((ev, i) => (
               <React.Fragment key={i}>
