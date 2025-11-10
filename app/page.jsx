@@ -24,16 +24,23 @@ const pxPerHourDesktop = 48;
 const addDays = (date, days) => new Date(date.getTime() + days * 86400000);
 
 function formatLocal(dt, tz) {
-  const parts = new Intl.DateTimeFormat('sv-SE', {
+  // Properly render the datetime in the specified airport timezone, not system local
+  const fmt = new Intl.DateTimeFormat('en-GB', {
     timeZone: tz,
     hour12: false,
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit',
     timeZoneName: 'shortOffset',
-  }).formatToParts(dt);
+  });
+
+  // Extract offset properly (e.g. "GMT−5" or "GMT+11")
+  const parts = fmt.formatToParts(dt);
   const kv = Object.fromEntries(parts.map(p => [p.type, p.value]));
-  return `${kv.year}-${kv.month}-${kv.day} ${kv.hour}:${kv.minute} (${kv.timeZoneName})`;
+  const tzPart = parts.find(p => p.type === 'timeZoneName')?.value || '';
+
+  return `${kv.year}-${kv.month}-${kv.day} ${kv.hour}:${kv.minute} (${tzPart})`;
 }
+
 
 function toDate(isoString) {
   return new Date(isoString);
