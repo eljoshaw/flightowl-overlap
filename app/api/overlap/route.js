@@ -240,8 +240,9 @@ export async function GET(req) {
     toStartUTC.setUTCHours(toStartUTC.getUTCHours() - toOffset);
     const toEndUTC = new Date(toStartUTC.getTime() + 24 * 60 * 60 * 1000);
     
-    const utcWindowStart = new Date(Math.min(fromStartUTC, toStartUTC));
-    const utcWindowEnd = new Date(Math.max(fromEndUTC, toEndUTC));
+    const windowStartUTC = new Date(Math.min(fromStartUTC, toStartUTC));
+    const windowEndUTC = new Date(Math.max(fromEndUTC, toEndUTC));
+
 
 
     const [A, B] = await Promise.all([
@@ -284,10 +285,11 @@ export async function GET(req) {
     return NextResponse.json({
     meta: {
       requestedDateLocal: dateStr,
-      utcWindowStart: utcWindowStart.toISOString(),
-      utcWindowEnd: utcWindowEnd.toISOString(),
-      utcDurationMinutes: (utcWindowEnd - utcWindowStart) / 60000,
+      utcWindowStart: windowStartUTC.toISOString(),
+      utcWindowEnd: windowEndUTC.toISOString(),
+      utcDurationMinutes: (windowEndUTC - windowStartUTC) / 60000,
     },
+
 
       from: {
         code: A.iata,
