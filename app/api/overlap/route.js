@@ -65,37 +65,54 @@ function buildContinuousIntervals(sunResultsYesterday, sunResultsToday, sunResul
 }
 
 // ---------- find overlap segments ----------
-function findOverlapSegments(intervalsA, intervalsB) {
+// ---------- find overlap segments across 3 days (continuous UTC timeline) ----------
+function findOverlapSegments(intervalsA, intervalsB, d0) {
   const rawSegments = [];
-  for (const [aStart, aEnd] of intervalsA)
+
+  // Compare all daylight/nighttime intervals (which already include -1, 0, +1 days)
+  for (const [aStart, aEnd] of intervalsA) {
     for (const [bStart, bEnd] of intervalsB) {
       const start = Math.max(aStart, bStart);
       const end = Math.min(aEnd, bEnd);
       if (end > start) rawSegments.push([start, end]);
     }
+  }
 
-  const clipped = rawSegments.map(([s, e]) => clampToDayWindow(s, e)).filter(Boolean);
-  if (!clipped.length) return { overlap: false, totalMinutes: 0, segments: [] };
+  if (rawSegments.length === 0) {
+    return { overlap: false, totalMinutes: 0, segments: [] };
+  }
 
-  clipped.sort((x, y) => x[0] - y[0]);
+  // Sort and merge adjacent or overlapping ranges
+  rawSegments.sort((x, y) => x[0] - y[0]);
   const merged = [];
-  let cur = clipped[0].slice();
-  for (let i = 1; i < clipped.length; i++) {
-    const [s, e] = clipped[i];
-    if (s <= cur[1]) cur[1] = Math.max(cur[1], e);
-    else { merged.push(cur); cur = [s, e]; }
+  let cur = rawSegments[0].slice();
+  for (let i = 1; i < rawSegments.length; i++) {
+    const [s, e] = rawSegments[i];
+    if (s <= cur[1]) {
+      cur[1] = Math.max(cur[1], e); // merge if overlapping
+    } else {
+      merged.push(cur);
+      cur = [s, e];
+    }
   }
   merged.push(cur);
+
+  // Now convert to UTC datetime segments
   const total = merged.reduce((sum, [s, e]) => sum + (e - s), 0);
+  const segments = merged.map(([s, e]) => {
+    const startUTC = new Date(d0.getTime() + s * 60000).toISOString();
+    const endUTC = new Date(d0.getTime() + e * 60000).toISOString();
+    return {
+      startUTC,
+      endUTC,
+      minutes: e - s
+    };
+  });
 
   return {
     overlap: true,
     totalMinutes: total,
-    segments: merged.map(([s, e]) => ({
-      startUTC: minutesToHHMM(s),
-      endUTC: minutesToHHMM(e),
-      minutes: e - s,
-    })),
+    segments
   };
 }
 
@@ -184,8 +201,8 @@ export async function GET(req) {
     const AIntervals = buildContinuousIntervals(A_m1, A_0, A_p1);
     const BIntervals = buildContinuousIntervals(B_m1, B_0, B_p1);
 
-    const daylight = findOverlapSegments(AIntervals.daylight, BIntervals.daylight);
-    const nighttime = findOverlapSegments(AIntervals.nighttime, BIntervals.nighttime);
+    const daylight = findOverlapSegments(AIntervals.daylight, BIntervals.daylight, d0);
+    const nighttime = findOverlapSegments(AIntervals.nighttime, BIntervals.nighttime, d0);
 
     return NextResponse.json({
       meta: {
