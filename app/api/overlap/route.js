@@ -2,19 +2,19 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { calculateSunTimes } from '../../../utils/sunCalc';
 
-// --- Supabase client (env vars set in Vercel) ---
+// --- Supabase client ---
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-// ---------- small helpers ----------
+// ---------- helpers ----------
 function toMinutes(hhmm) {
   const [h, m] = hhmm.split(':').map(Number);
   return h * 60 + m;
 }
 function minutesToHHMM(mins) {
-  const m = ((mins % 1440) + 1440) % 1440; // wrap to 0..1439
+  const m = ((mins % 1440) + 1440) % 1440;
   const hh = String(Math.floor(m / 60)).padStart(2, '0');
   const mm = String(m % 60).padStart(2, '0');
   return `${hh}:${mm}`;
@@ -25,48 +25,39 @@ function clampToDayWindow(start, end) {
   return e > s ? [s, e] : null;
 }
 
-// ---------- build intervals for ONE day ----------
+// ---------- build intervals ----------
 function buildIntervalsForOneDay(sunriseMin, sunsetMin) {
   if (
     typeof sunriseMin !== 'number' ||
     typeof sunsetMin !== 'number' ||
     Number.isNaN(sunriseMin) ||
     Number.isNaN(sunsetMin)
-  ) {
-    return { daylight: [], nighttime: [] };
-  }
+  ) return { daylight: [], nighttime: [] };
+
   if (sunsetMin > sunriseMin) {
     return {
       daylight: [[sunriseMin, sunsetMin]],
-      nighttime: [
-        [0, sunriseMin],
-        [sunsetMin, 1440],
-      ],
+      nighttime: [[0, sunriseMin], [sunsetMin, 1440]],
     };
   }
   return {
-    daylight: [
-      [sunriseMin, 1440],
-      [0, sunsetMin],
-    ],
+    daylight: [[sunriseMin, 1440], [0, sunsetMin]],
     nighttime: [[sunsetMin, sunriseMin]],
   };
 }
 
-// ---------- build 3-day continuous intervals ----------
+// ---------- continuous 3-day intervals ----------
 function buildContinuousIntervals(sunResultsYesterday, sunResultsToday, sunResultsTomorrow) {
   const days = [sunResultsYesterday, sunResultsToday, sunResultsTomorrow];
   const offsets = [-1440, 0, 1440];
   const out = { daylight: [], nighttime: [] };
 
   days.forEach((res, i) => {
-    if (!res || typeof res.sunriseUTC !== 'string' || typeof res.sunsetUTC !== 'string') return;
+    if (!res?.sunriseUTC || !res?.sunsetUTC) return;
     const sunrise = toMinutes(res.sunriseUTC);
     const sunset = toMinutes(res.sunsetUTC);
-
     const base = buildIntervalsForOneDay(sunrise, sunset);
     const off = offsets[i];
-
     base.daylight.forEach(([s, e]) => out.daylight.push([s + off, e + off]));
     base.nighttime.forEach(([s, e]) => out.nighttime.push([s + off, e + off]));
   });
@@ -76,32 +67,23 @@ function buildContinuousIntervals(sunResultsYesterday, sunResultsToday, sunResul
 // ---------- find overlap segments ----------
 function findOverlapSegments(intervalsA, intervalsB) {
   const rawSegments = [];
-  for (const [aStart, aEnd] of intervalsA) {
+  for (const [aStart, aEnd] of intervalsA)
     for (const [bStart, bEnd] of intervalsB) {
       const start = Math.max(aStart, bStart);
       const end = Math.min(aEnd, bEnd);
       if (end > start) rawSegments.push([start, end]);
     }
-  }
-  const clipped = [];
-  for (const [s, e] of rawSegments) {
-    const clippedSeg = clampToDayWindow(s, e);
-    if (clippedSeg) clipped.push(clippedSeg);
-  }
-  if (clipped.length === 0) {
-    return { overlap: false, totalMinutes: 0, segments: [] };
-  }
+
+  const clipped = rawSegments.map(([s, e]) => clampToDayWindow(s, e)).filter(Boolean);
+  if (!clipped.length) return { overlap: false, totalMinutes: 0, segments: [] };
+
   clipped.sort((x, y) => x[0] - y[0]);
   const merged = [];
   let cur = clipped[0].slice();
   for (let i = 1; i < clipped.length; i++) {
     const [s, e] = clipped[i];
-    if (s <= cur[1]) {
-      cur[1] = Math.max(cur[1], e);
-    } else {
-      merged.push(cur);
-      cur = [s, e];
-    }
+    if (s <= cur[1]) cur[1] = Math.max(cur[1], e);
+    else { merged.push(cur); cur = [s, e]; }
   }
   merged.push(cur);
   const total = merged.reduce((sum, [s, e]) => sum + (e - s), 0);
@@ -117,7 +99,7 @@ function findOverlapSegments(intervalsA, intervalsB) {
   };
 }
 
-// ---------- fetch airport by IATA ----------
+// ---------- fetch airport ----------
 async function getAirportByIATA(iata) {
   const code = String(iata || '').toUpperCase();
   const { data, error } = await supabase
@@ -129,12 +111,13 @@ async function getAirportByIATA(iata) {
   return data;
 }
 
-// ---------- helper to build sunrise/sunset with UTC + local ----------
+// ---------- helper to structure sunrise/sunset in UTC + local ----------
 function makeSunTimes(dateObjs, sunResults, tz) {
-  const fmtUTC = (date, time) => `${date}T${time}:00Z`;
-  const makeLocal = (date, time) =>
-    new Date(fmtUTC(date, time)).toLocaleString('sv-SE', {
+  const fmtUTC = (d, t) => `${d}T${t}:00Z`;
+  const makeLocal = (d, t) =>
+    new Date(fmtUTC(d, t)).toLocaleString('sv-SE', {
       timeZone: tz,
+      timeZoneName: 'shortOffset',
     });
 
   return [
@@ -162,7 +145,7 @@ function makeSunTimes(dateObjs, sunResults, tz) {
   ];
 }
 
-// ---------- API route ----------
+// ---------- main API route ----------
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
@@ -170,12 +153,11 @@ export async function GET(req) {
     const toCode = (searchParams.get('to') || '').toUpperCase();
     const dateStr = searchParams.get('date');
 
-    if (!fromCode || !toCode) {
+    if (!fromCode || !toCode)
       return NextResponse.json(
-        { error: 'Use ?from=DXB&to=SYD&date=YYYY-MM-DD (date optional for now)' },
+        { error: 'Use ?from=DXB&to=SYD&date=YYYY-MM-DD (date optional)' },
         { status: 400 }
       );
-    }
 
     const d0 = dateStr
       ? new Date(dateStr + 'T00:00:00Z')
@@ -183,7 +165,10 @@ export async function GET(req) {
     const dM1 = new Date(d0.getTime() - 86400000);
     const dP1 = new Date(d0.getTime() + 86400000);
 
-    const [A, B] = await Promise.all([getAirportByIATA(fromCode), getAirportByIATA(toCode)]);
+    const [A, B] = await Promise.all([
+      getAirportByIATA(fromCode),
+      getAirportByIATA(toCode),
+    ]);
 
     const [A_m1, A_0, A_p1] = [
       calculateSunTimes(A.latitude, A.longitude, dM1),
@@ -221,11 +206,9 @@ export async function GET(req) {
         timezone: B.timezone,
         sunTimes: makeSunTimes({ dM1, d0, dP1 }, { m1: B_m1, _0: B_0, p1: B_p1 }, B.timezone),
       },
-      overlap: {
-        daylight,
-        nighttime,
-      },
+      overlap: { daylight, nighttime },
     });
+
   } catch (e) {
     return NextResponse.json({ error: e.message || 'Unknown error' }, { status: 500 });
   }
