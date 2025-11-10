@@ -45,16 +45,23 @@ function buildIntervalsForOneDay(sunriseMin, sunsetMin) {
     typeof sunsetMin !== 'number' ||
     Number.isNaN(sunriseMin) ||
     Number.isNaN(sunsetMin)
-  ) return { daylight: [], nighttime: [] };
+  )
+    return { daylight: [], nighttime: [] };
 
   if (sunsetMin > sunriseMin) {
     return {
       daylight: [[sunriseMin, sunsetMin]],
-      nighttime: [[0, sunriseMin], [sunsetMin, 1440]],
+      nighttime: [
+        [0, sunriseMin],
+        [sunsetMin, 1440],
+      ],
     };
   }
   return {
-    daylight: [[sunriseMin, 1440], [0, sunsetMin]],
+    daylight: [
+      [sunriseMin, 1440],
+      [0, sunsetMin],
+    ],
     nighttime: [[sunsetMin, sunriseMin]],
   };
 }
@@ -77,12 +84,10 @@ function buildContinuousIntervals(sunResultsYesterday, sunResultsToday, sunResul
   return out;
 }
 
-// ---------- find overlap segments across 3 days (with UTC + local times) ----------
-// ---------- find overlap segments across 3 days (with UTC + local times + offsets) ----------
+// ---------- find overlap segments ----------
 function findOverlapSegments(intervalsA, intervalsB, d0, fromTZ, toTZ) {
   const rawSegments = [];
 
-  // Find all overlapping intervals across the 3-day continuous UTC window
   for (const [aStart, aEnd] of intervalsA) {
     for (const [bStart, bEnd] of intervalsB) {
       const start = Math.max(aStart, bStart);
@@ -91,52 +96,47 @@ function findOverlapSegments(intervalsA, intervalsB, d0, fromTZ, toTZ) {
     }
   }
 
-  if (rawSegments.length === 0) {
+  if (rawSegments.length === 0)
     return { overlap: false, totalMinutes: 0, segments: [] };
-  }
 
-  // Sort and merge overlapping segments
   rawSegments.sort((x, y) => x[0] - y[0]);
   const merged = [];
   let cur = rawSegments[0].slice();
   for (let i = 1; i < rawSegments.length; i++) {
     const [s, e] = rawSegments[i];
     if (s <= cur[1]) cur[1] = Math.max(cur[1], e);
-    else { merged.push(cur); cur = [s, e]; }
+    else {
+      merged.push(cur);
+      cur = [s, e];
+    }
   }
   merged.push(cur);
 
-  // Helper: get numeric UTC offset in hours for a given timezone/date
-  // Helper: get numeric UTC offset in hours for a given timezone/date
   const getOffsetHours = (tz, dateObj) => {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: tz,
       timeZoneName: 'shortOffset',
     }).formatToParts(dateObj);
     const tzPart = parts.find(p => p.type === 'timeZoneName')?.value || '';
-
-    // Try multiple possible patterns: GMT+4, UTC+04:00, GMT+0530, etc.
     const regex = /([+-]\d{1,2})(?::?(\d{2}))?/;
     const match = tzPart.match(regex);
     if (!match) return 0;
-
     const hours = parseInt(match[1], 10);
     const mins = match[2] ? parseInt(match[2], 10) : 0;
     return hours + mins / 60;
   };
 
-
-  // Convert to UTC + local datetime segments
   const total = merged.reduce((sum, [s, e]) => sum + (e - s), 0);
   const segments = merged.map(([s, e]) => {
     const startUTCDate = new Date(d0.getTime() + s * 60000);
     const endUTCDate = new Date(d0.getTime() + e * 60000);
-
     const fmtLocal = (d, tz) =>
-      d.toLocaleString('sv-SE', {
-        timeZone: tz,
-        timeZoneName: 'shortOffset',
-      }).replace(' ', 'T'); // ISO-like format
+      d
+        .toLocaleString('sv-SE', {
+          timeZone: tz,
+          timeZoneName: 'shortOffset',
+        })
+        .replace(' ', 'T');
 
     const fromOffset = getOffsetHours(fromTZ, startUTCDate);
     const toOffset = getOffsetHours(toTZ, startUTCDate);
@@ -151,15 +151,11 @@ function findOverlapSegments(intervalsA, intervalsB, d0, fromTZ, toTZ) {
       toEndLocal: fmtLocal(endUTCDate, toTZ),
       fromOffsetHours: fromOffset,
       toOffsetHours: toOffset,
-      spansMidnightUTC: startUTCDate.getUTCDate() !== endUTCDate.getUTCDate()
+      spansMidnightUTC: startUTCDate.getUTCDate() !== endUTCDate.getUTCDate(),
     };
   });
 
-  return {
-    overlap: true,
-    totalMinutes: total,
-    segments
-  };
+  return { overlap: true, totalMinutes: total, segments };
 }
 
 // ---------- fetch airport ----------
@@ -174,7 +170,7 @@ async function getAirportByIATA(iata) {
   return data;
 }
 
-// ---------- helper to structure sunrise/sunset in UTC + local ----------
+// ---------- helper to structure sunrise/sunset ----------
 function makeSunTimes(dateObjs, sunResults, tz) {
   const fmtUTC = (d, t) => `${d}T${t}:00Z`;
   const makeLocal = (d, t) =>
@@ -223,48 +219,33 @@ export async function GET(req) {
       );
 
     const d0 = dateStr
-      ? new Date(dateStr + 'T00:00:00Z')
+      ? new Date(`${dateStr}T00:00:00Z`)
       : new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
     const dM1 = new Date(d0.getTime() - 86400000);
     const dP1 = new Date(d0.getTime() + 86400000);
-    
-    // --- Dynamic UTC window calculation ---
-    const fromOffset = getOffsetHoursForDate(await (await getAirportByIATA(fromCode)).timezone, dateStr);
-    const toOffset = getOffsetHoursForDate(await (await getAirportByIATA(toCode)).timezone, dateStr);
-    
-    const fromStartUTC = new Date(`${dateStr}T00:00:00Z`);
-    fromStartUTC.setUTCHours(fromStartUTC.getUTCHours() - fromOffset);
-    const fromEndUTC = new Date(fromStartUTC.getTime() + 24 * 60 * 60 * 1000);
-    
-    const toStartUTC = new Date(`${dateStr}T00:00:00Z`);
-    toStartUTC.setUTCHours(toStartUTC.getUTCHours() - toOffset);
-    const toEndUTC = new Date(toStartUTC.getTime() + 24 * 60 * 60 * 1000);
-    
-    const windowStartUTC = new Date(Math.min(fromStartUTC, toStartUTC));
-    const windowEndUTC = new Date(Math.max(fromEndUTC, toEndUTC));
 
-
-
+    // --- Fetch airports once ---
     const [A, B] = await Promise.all([
       getAirportByIATA(fromCode),
       getAirportByIATA(toCode),
     ]);
-    
+
+    // --- Dynamic UTC window calculation ---
     const fromOffset = getOffsetHoursForDate(A.timezone, dateStr);
     const toOffset = getOffsetHoursForDate(B.timezone, dateStr);
-    
-    const fromStartUTC = new Date(`${dateStr}T00:00:00Z`);
-    fromStartUTC.setUTCHours(fromStartUTC.getUTCHours() - fromOffset);
-    const fromEndUTC = new Date(fromStartUTC.getTime() + 24 * 60 * 60 * 1000);
-    
-    const toStartUTC = new Date(`${dateStr}T00:00:00Z`);
-    toStartUTC.setUTCHours(toStartUTC.getUTCHours() - toOffset);
-    const toEndUTC = new Date(toStartUTC.getTime() + 24 * 60 * 60 * 1000);
-    
-    const utcWindowStart = new Date(Math.min(fromStartUTC, toStartUTC));
-    const utcWindowEnd = new Date(Math.max(fromEndUTC, toEndUTC));
 
+    const fromDayStartUTC = new Date(`${dateStr}T00:00:00Z`);
+    fromDayStartUTC.setUTCHours(fromDayStartUTC.getUTCHours() - fromOffset);
+    const fromDayEndUTC = new Date(fromDayStartUTC.getTime() + 24 * 60 * 60 * 1000);
 
+    const toDayStartUTC = new Date(`${dateStr}T00:00:00Z`);
+    toDayStartUTC.setUTCHours(toDayStartUTC.getUTCHours() - toOffset);
+    const toDayEndUTC = new Date(toDayStartUTC.getTime() + 24 * 60 * 60 * 1000);
+
+    const utcWindowStart = new Date(Math.min(fromDayStartUTC, toDayStartUTC));
+    const utcWindowEnd = new Date(Math.max(fromDayEndUTC, toDayEndUTC));
+
+    // --- Sun times ---
     const [A_m1, A_0, A_p1] = [
       calculateSunTimes(A.latitude, A.longitude, dM1),
       calculateSunTimes(A.latitude, A.longitude, d0),
@@ -276,38 +257,57 @@ export async function GET(req) {
       calculateSunTimes(B.latitude, B.longitude, dP1),
     ];
 
+    // --- Overlaps ---
     const AIntervals = buildContinuousIntervals(A_m1, A_0, A_p1);
     const BIntervals = buildContinuousIntervals(B_m1, B_0, B_p1);
 
-    const daylight = findOverlapSegments(AIntervals.daylight, BIntervals.daylight, d0, A.timezone, B.timezone);
-    const nighttime = findOverlapSegments(AIntervals.nighttime, BIntervals.nighttime, d0, A.timezone, B.timezone);
+    const daylight = findOverlapSegments(
+      AIntervals.daylight,
+      BIntervals.daylight,
+      d0,
+      A.timezone,
+      B.timezone
+    );
+    const nighttime = findOverlapSegments(
+      AIntervals.nighttime,
+      BIntervals.nighttime,
+      d0,
+      A.timezone,
+      B.timezone
+    );
 
+    // --- Response ---
     return NextResponse.json({
-    meta: {
-      requestedDateLocal: dateStr,
-      utcWindowStart: windowStartUTC.toISOString(),
-      utcWindowEnd: windowEndUTC.toISOString(),
-      utcDurationMinutes: (windowEndUTC - windowStartUTC) / 60000,
-    },
-
-
+      meta: {
+        requestedDateLocal: dateStr,
+        utcWindowStart: utcWindowStart.toISOString(),
+        utcWindowEnd: utcWindowEnd.toISOString(),
+        utcDurationMinutes: (utcWindowEnd - utcWindowStart) / 60000,
+      },
       from: {
         code: A.iata,
         name: A.name,
         country: A.country,
         timezone: A.timezone,
-        sunTimes: makeSunTimes({ dM1, d0, dP1 }, { m1: A_m1, _0: A_0, p1: A_p1 }, A.timezone),
+        sunTimes: makeSunTimes(
+          { dM1, d0, dP1 },
+          { m1: A_m1, _0: A_0, p1: A_p1 },
+          A.timezone
+        ),
       },
       to: {
         code: B.iata,
         name: B.name,
         country: B.country,
         timezone: B.timezone,
-        sunTimes: makeSunTimes({ dM1, d0, dP1 }, { m1: B_m1, _0: B_0, p1: B_p1 }, B.timezone),
+        sunTimes: makeSunTimes(
+          { dM1, d0, dP1 },
+          { m1: B_m1, _0: B_0, p1: B_p1 },
+          B.timezone
+        ),
       },
       overlap: { daylight, nighttime },
     });
-
   } catch (e) {
     return NextResponse.json({ error: e.message || 'Unknown error' }, { status: 500 });
   }
