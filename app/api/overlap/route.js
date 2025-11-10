@@ -94,18 +94,24 @@ function findOverlapSegments(intervalsA, intervalsB, d0, fromTZ, toTZ) {
   merged.push(cur);
 
   // Helper: get numeric UTC offset in hours for a given timezone/date
+  // Helper: get numeric UTC offset in hours for a given timezone/date
   const getOffsetHours = (tz, dateObj) => {
-    const fmt = new Intl.DateTimeFormat('en-US', {
+    const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: tz,
       timeZoneName: 'shortOffset',
     }).formatToParts(dateObj);
-    const part = fmt.find(p => p.type === 'timeZoneName')?.value || 'UTC';
-    const match = part.match(/([+-]\d{2})(?::?(\d{2}))?/);
+    const tzPart = parts.find(p => p.type === 'timeZoneName')?.value || '';
+
+    // Try multiple possible patterns: GMT+4, UTC+04:00, GMT+0530, etc.
+    const regex = /([+-]\d{1,2})(?::?(\d{2}))?/;
+    const match = tzPart.match(regex);
     if (!match) return 0;
+
     const hours = parseInt(match[1], 10);
     const mins = match[2] ? parseInt(match[2], 10) : 0;
     return hours + mins / 60;
   };
+
 
   // Convert to UTC + local datetime segments
   const total = merged.reduce((sum, [s, e]) => sum + (e - s), 0);
