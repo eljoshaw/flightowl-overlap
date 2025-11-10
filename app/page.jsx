@@ -174,16 +174,20 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
       });
     
       // --- labels for key events ---
-      const labelStyle = (y) => ({
-        position: 'absolute',
-        top: y,
-        [side === 'left' ? 'left' : 'right']: side === 'left' ? '-6.5rem' : '-6.5rem',
-        textAlign: side === 'left' ? 'right' : 'left',
-        fontSize: 11,
-        color: COLORS.text,
-        transform: 'translateY(-50%)',
-        whiteSpace: 'nowrap',
-      });
+        const labelStyle = (y) => ({
+          position: 'absolute',
+          top: y,
+          [side === 'left' ? 'left' : 'right']: side === 'left' ? '0.25rem' : '0.25rem',
+          textAlign: side === 'left' ? 'left' : 'right',
+          fontSize: 11,
+          color: COLORS.text,
+          transform: 'translateY(-50%)',
+          background: 'rgba(255,255,255,0.7)',
+          padding: '0 4px',
+          borderRadius: 3,
+          whiteSpace: 'nowrap',
+        });
+
     
       const labelLine = (y) => ({
         position: 'absolute',
@@ -199,26 +203,21 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
     
       const labels = (
         <>
-          {yMidnight && (
-            <>
-              <div style={labelLine(yMidnight)} />
-              <div style={labelStyle(yMidnight)}>🕛 {timeLabel(localMidnight)} midnight</div>
-            </>
-          )}
-          {ySunrise && (
-            <>
-              <div style={labelLine(ySunrise)} />
-              <div style={labelStyle(ySunrise)}>🌅 {timeLabel(sunrise)} sunrise</div>
-            </>
-          )}
-          {ySunset && (
-            <>
-              <div style={labelLine(ySunset)} />
-              <div style={labelStyle(ySunset)}>🌇 {timeLabel(sunset)} sunset</div>
-            </>
-          )}
+          {[{ y: yMidnight, dt: localMidnight, icon: '🕛', text: 'midnight' },
+            { y: ySunrise, dt: sunrise, icon: '🌅', text: 'sunrise' },
+            { y: ySunset, dt: sunset, icon: '🌇', text: 'sunset' }]
+            .filter(ev => ev.y !== null && ev.y >= 0 && ev.y <= heightPx)
+            .map((ev, i) => (
+              <React.Fragment key={i}>
+                <div style={labelLine(ev.y)} />
+                <div style={labelStyle(ev.y)}>
+                  {ev.icon} {timeLabel(ev.dt)} {ev.text}
+                </div>
+              </React.Fragment>
+            ))}
         </>
       );
+
     
       // --- local labels for top/bottom ---
       const localStartLabel = formatLocal(utcWindowStart, tz);
@@ -243,7 +242,7 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
             border: `1px solid ${COLORS.rail}`,
             borderRadius: 8,
             height: heightPx,
-            overflow: 'hidden',
+            overflow: 'visible',
             width: '50%', // narrower
             margin: side === 'left' ? '0 auto 0 0' : '0 0 0 auto', // align left/right
           }}>
