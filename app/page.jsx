@@ -4,45 +4,46 @@ import React, { useMemo, useState, useEffect } from 'react';
 
 /**
  * ==== FlightOwl Vertical Timeline (MVP) ====
- * Updated 10 Nov:
- * - Columns narrower (50%)
- * - True local midnight markers (in UTC alignment)
- * - Reliable sunrise/sunset label rendering
+ * - Inputs: from (IATA), to (IATA), date (YYYY-MM-DD)
+ * - Fetches: /api/overlap?from=..&to=..&date=..
+ * - Renders: Two vertical columns (Departure | Arrival), aligned by UTC, bands for Day/Night
+ * - Labels: show local times only (no UTC ticks), top/bottom range labels in each local time zone
+ * - Scaling: mobile ~32px/hour, desktop ~48px/hour (scrollable container)
+ *
+ * You can refine styles later; this is intentionally minimal and robust.
  */
 
 const COLORS = {
-  day: '#fff9cc',
-  night: '#01657e',
-  text: '#222',
-  rail: '#eaeaea',
+  day: '#fff9cc',       // Daytime
+  night: '#01657e',     // Nighttime
+  text: '#222',         // Labels/borders
+  rail: '#eaeaea',      // Axis/rail background
 };
 
-const pxPerHourMobile = 32;
-const pxPerHourDesktop = 48;
+const pxPerHourMobile = 32;  // ~40h => ~1280px scroll
+const pxPerHourDesktop = 48; // ~40h => ~1920px scroll
 
-// ---------- time helpers ----------
+// ---------- small time helpers ----------
 const addDays = (date, days) => new Date(date.getTime() + days * 86400000);
 
 function formatLocal(dt, tz) {
-  // Properly render the datetime in the specified airport timezone, not system local
-  const fmt = new Intl.DateTimeFormat('en-GB', {
+  // ISO-like but in local tz: "YYYY-MM-DD HH:mm (UTC±hh:mm)"
+  const parts = new Intl.DateTimeFormat('sv-SE', {
     timeZone: tz,
     hour12: false,
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit',
     timeZoneName: 'shortOffset',
-  });
+  }).formatToParts(dt);
 
-  // Extract offset properly (e.g. "GMT−5" or "GMT+11")
-  const parts = fmt.formatToParts(dt);
   const kv = Object.fromEntries(parts.map(p => [p.type, p.value]));
-  const tzPart = parts.find(p => p.type === 'timeZoneName')?.value || '';
-
-  return `${kv.year}-${kv.month}-${kv.day} ${kv.hour}:${kv.minute} (${tzPart})`;
+  // sv-SE parts: year, month, day, hour, minute, literal, timeZoneName
+  // Compose as "YYYY-MM-DD HH:mm (XXX)"
+  return `${kv.year}-${kv.month}-${kv.day} ${kv.hour}:${kv.minute} (${kv.timeZoneName})`;
 }
 
-
 function toDate(isoString) {
+  // robust parse for "YYYY-MM-DDTHH:mm:ss.sssZ"
   return new Date(isoString);
 }
 
@@ -68,15 +69,30 @@ function clipInterval({ start, end }, windowStart, windowEnd) {
   return e > s ? { start: s, end: e } : null;
 }
 
+/**
+ * Build daylight intervals for one airport across the full window
+ * sunTimes: [{ date, sunriseUTC, sunsetUTC, sunriseLocal, sunsetLocal }]
+ * Returns: merged daylight intervals (UTC Dates) clipped to [windowStart, windowEnd]
+ */
 function buildDaylightUTC(sunTimes, windowStart, windowEnd) {
   const raw = [];
+
   for (const d of sunTimes) {
     let sr = toDate(d.sunriseUTC);
     let ss = toDate(d.sunsetUTC);
-    if (ss <= sr) ss = addDays(ss, 1);
+
+    // If sunset <= sunrise, it wraps past midnight (sunset next day)
+    if (ss <= sr) {
+      ss = addDays(ss, 1);
+    }
+
     raw.push({ start: sr, end: ss });
   }
+
+  // Merge across days
   const merged = mergeIntervals(raw);
+
+  // Clip to window
   const clipped = [];
   for (const iv of merged) {
     const c = clipInterval(iv, windowStart, windowEnd);
@@ -85,10 +101,14 @@ function buildDaylightUTC(sunTimes, windowStart, windowEnd) {
   return clipped;
 }
 
+/**
+ * Compute night intervals as the complement of daylight within the window
+ */
 function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
   const day = mergeIntervals(daylightIntervals);
   const out = [];
   let cursor = new Date(windowStart);
+
   for (const iv of day) {
     if (iv.start > cursor) {
       out.push({ start: new Date(cursor), end: new Date(iv.start) });
@@ -101,49 +121,40 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
   return out;
 }
 
-// --- helpers to get timezone offset + local midnight in UTC ---
-function getOffsetHours(tz, refUtcDate) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz,
-    timeZoneName: 'shortOffset',
-  }).formatToParts(refUtcDate);
-  const tzPart = parts.find(p => p.type === 'timeZoneName')?.value || '';
-  const m = tzPart.match(/([+-]\d{1,2})(?::?(\d{2}))?/);
-  if (!m) return 0;
-  const h = parseInt(m[1], 10);
-  const mm = m[2] ? parseInt(m[2], 10) : 0;
-  return h + mm / 60;
-}
-
-function getLocalMidnightUTC(dateStr, tz) {
-  const ref = new Date(dateStr + 'T12:00:00Z');
-  const offsetHours = getOffsetHours(tz, ref);
-  const utcOfLocalMidnight = new Date(Date.parse(dateStr + 'T00:00:00Z') - offsetHours * 3600_000);
-  return utcOfLocalMidnight;
-}
-
-// --- main column renderer ---
+/**
+ * Column renderer:
+ * - background "night" (full)
+ * - overlay "day" blocks positioned absolutely by UTC time within window
+ * - labels: city code, top/bottom local time range
+ */
 function CityColumn({ title, tz, sunTimes, utcWindowStart, utcWindowEnd, heightPx, pxPerMs, side = 'left' }) {
+  // --- build daylight intervals ---
   const daylight = useMemo(
     () => buildDaylightUTC(sunTimes, utcWindowStart, utcWindowEnd),
     [sunTimes, utcWindowStart, utcWindowEnd]
   );
 
+  // --- find sunrise/sunset for the main (middle) day ---
   const mainDay = sunTimes?.[1];
   const sunrise = mainDay ? new Date(mainDay.sunriseUTC) : null;
   const sunset = mainDay ? new Date(mainDay.sunsetUTC) : null;
-  const localMidnight = mainDay ? getLocalMidnightUTC(mainDay.date, tz) : null;
 
+  // --- compute local midnight for that day in this tz ---
+  const localMidnight = mainDay ? new Date(`${mainDay.date}T00:00:00Z`) : null;
+
+  // --- convert to vertical positions ---
   const posFor = (dt) => (dt ? (dt.getTime() - utcWindowStart.getTime()) * pxPerMs : null);
   const yMidnight = posFor(localMidnight);
   const ySunrise = posFor(sunrise);
   const ySunset = posFor(sunset);
 
+  // --- draw daylight blocks ---
   const dayBlocks = daylight.map((iv, idx) => {
     const startMs = iv.start.getTime() - utcWindowStart.getTime();
     const durMs = iv.end.getTime() - iv.start.getTime();
     const top = startMs * pxPerMs;
     const h = Math.max(1, durMs * pxPerMs);
+
     return (
       <div
         key={idx}
@@ -157,14 +168,16 @@ function CityColumn({ title, tz, sunTimes, utcWindowStart, utcWindowEnd, heightP
           border: `1px solid ${COLORS.rail}`,
           borderRadius: 6,
         }}
+        title={`${formatLocal(iv.start, tz)} → ${formatLocal(iv.end, tz)} (Day)`}
       />
     );
   });
 
+  // --- labels for key events ---
   const labelStyle = (y) => ({
     position: 'absolute',
-    top: y + 0.5,
-    [side === 'left' ? 'left' : 'right']: '0.25rem',
+    top: y,
+    [side === 'left' ? 'left' : 'right']: side === 'left' ? '0.25rem' : '0.25rem',
     textAlign: side === 'left' ? 'left' : 'right',
     fontSize: 11,
     color: COLORS.text,
@@ -174,6 +187,7 @@ function CityColumn({ title, tz, sunTimes, utcWindowStart, utcWindowEnd, heightP
     borderRadius: 3,
     whiteSpace: 'nowrap',
   });
+
 
   const labelLine = (y) => ({
     position: 'absolute',
@@ -204,11 +218,14 @@ function CityColumn({ title, tz, sunTimes, utcWindowStart, utcWindowEnd, heightP
     </>
   );
 
+
+  // --- local labels for top/bottom ---
   const localStartLabel = formatLocal(utcWindowStart, tz);
   const localEndLabel = formatLocal(utcWindowEnd, tz);
 
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
       <div style={{ marginBottom: 8 }}>
         <div style={{ fontWeight: 700, color: COLORS.text, fontSize: 16 }}>{title}</div>
         <div style={{ fontSize: 12, color: '#555' }}>{tz}</div>
@@ -217,6 +234,8 @@ function CityColumn({ title, tz, sunTimes, utcWindowStart, utcWindowEnd, heightP
           <div><strong>End:</strong> {localEndLabel}</div>
         </div>
       </div>
+
+      {/* Rail */}
       <div style={{
         position: 'relative',
         background: COLORS.night,
@@ -224,8 +243,8 @@ function CityColumn({ title, tz, sunTimes, utcWindowStart, utcWindowEnd, heightP
         borderRadius: 8,
         height: heightPx,
         overflow: 'visible',
-        width: '50%',
-        margin: side === 'left' ? '0 auto 0 0' : '0 0 0 auto',
+        width: '50%', // narrower
+        margin: side === 'left' ? '0 auto 0 0' : '0 0 0 auto', // align left/right
       }}>
         {dayBlocks}
         {labels}
@@ -234,16 +253,16 @@ function CityColumn({ title, tz, sunTimes, utcWindowStart, utcWindowEnd, heightP
   );
 }
 
-// --- main page ---
 export default function Page() {
   const [from, setFrom] = useState('JFK');
   const [to, setTo] = useState('SYD');
-  const [date, setDate] = useState('2025-11-09');
+  const [date, setDate] = useState('2025-11-09'); // YYYY-MM-DD
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
-  const [pxPerHour, setPxPerHour] = useState(pxPerHourMobile);
 
+  // responsive scale
+  const [pxPerHour, setPxPerHour] = useState(pxPerHourMobile);
   useEffect(() => {
     const update = () => setPxPerHour(window.innerWidth < 768 ? pxPerHourMobile : pxPerHourDesktop);
     update();
@@ -281,9 +300,12 @@ export default function Page() {
 
   return (
     <div style={{ maxWidth: 980, margin: '0 auto', padding: '16px 16px 80px' }}>
+      {/* Title */}
       <h1 style={{ fontSize: 22, margin: 0, color: COLORS.text, fontWeight: 800 }}>
         FlightOwl · Light Overlap (Vertical · Mobile-first)
       </h1>
+
+      {/* Form */}
       <form onSubmit={handleSubmit} style={{
         display: 'flex', gap: 12, flexWrap: 'wrap',
         alignItems: 'flex-end', marginTop: 16, marginBottom: 16
@@ -295,7 +317,10 @@ export default function Page() {
             onChange={(e) => setFrom(e.target.value.toUpperCase())}
             maxLength={3}
             required
-            style={{ border: '1px solid #ccc', borderRadius: 8, padding: '8px 10px', fontSize: 16, width: 120 }}
+            style={{
+              border: '1px solid #ccc', borderRadius: 8, padding: '8px 10px',
+              fontSize: 16, width: 120
+            }}
             placeholder="JFK"
           />
         </div>
@@ -306,18 +331,24 @@ export default function Page() {
             onChange={(e) => setTo(e.target.value.toUpperCase())}
             maxLength={3}
             required
-            style={{ border: '1px solid #ccc', borderRadius: 8, padding: '8px 10px', fontSize: 16, width: 120 }}
+            style={{
+              border: '1px solid #ccc', borderRadius: 8, padding: '8px 10px',
+              fontSize: 16, width: 120
+            }}
             placeholder="SYD"
           />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: 12, color: '#444' }}>Date</label>
+          <label style={{ display: 'block', fontSize: 12, color: '#444' }}>Date (YYYY-MM-DD)</label>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
             required
-            style={{ border: '1px solid #ccc', borderRadius: 8, padding: '8px 10px', fontSize: 16 }}
+            style={{
+              border: '1px solid #ccc', borderRadius: 8, padding: '8px 10px',
+              fontSize: 16
+            }}
           />
         </div>
         <button
@@ -333,6 +364,7 @@ export default function Page() {
         </button>
       </form>
 
+      {/* Error */}
       {err && (
         <div style={{
           color: '#b00020', background: '#ffecec', border: '1px solid #ffd3d3',
@@ -340,31 +372,60 @@ export default function Page() {
         }}>{err}</div>
       )}
 
+      {/* Timeline */}
       {data && timeline && (
         <>
+          {/* Sticky labels: date & airports */}
           <div style={{
             position: 'sticky', top: 0, background: 'white', zIndex: 5,
             padding: '8px 0 12px', borderBottom: `1px solid ${COLORS.rail}`
           }}>
             <div style={{ fontSize: 13, color: '#444', marginBottom: 6 }}>
-              Local date: <strong>{data.meta.requestedDateLocal}</strong> · Full UTC window:
-              <strong> {new Date(data.meta.utcWindowStart).toISOString().slice(0, 16)}</strong> →
-              <strong> {new Date(data.meta.utcWindowEnd).toISOString().slice(0, 16)}</strong>
+              Local date: <strong>{data.meta.requestedDateLocal}</strong> ·
+              Full UTC window rendered for both: <strong>{new Date(data.meta.utcWindowStart).toISOString().slice(0,16)}</strong> → <strong>{new Date(data.meta.utcWindowEnd).toISOString().slice(0,16)}</strong>
             </div>
             <div style={{ display: 'flex', gap: 16 }}>
-              <div style={{ flex: 1, fontWeight: 700, color: COLORS.text }}>{data.from.code} · {data.from.name}</div>
-              <div style={{ flex: 1, fontWeight: 700, color: COLORS.text }}>{data.to.code} · {data.to.name}</div>
+              <div style={{ flex: 1, fontWeight: 700, color: COLORS.text }}>
+                {data.from.code} · {data.from.name}
+              </div>
+              <div style={{ flex: 1, fontWeight: 700, color: COLORS.text }}>
+                {data.to.code} · {data.to.name}
+              </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginTop: 12 }}>
-            <CityColumn {...data.from} utcWindowStart={timeline.windowStart} utcWindowEnd={timeline.windowEnd} heightPx={timeline.heightPx} pxPerMs={timeline.pxPerMs} side="left" />
-            <CityColumn {...data.to} utcWindowStart={timeline.windowStart} utcWindowEnd={timeline.windowEnd} heightPx={timeline.heightPx} pxPerMs={timeline.pxPerMs} side="right" />
+          {/* Columns */}
+          <div style={{
+            display: 'flex', gap: 16, alignItems: 'flex-start',
+            marginTop: 12
+          }}>
+          <CityColumn
+            title={`${data.from.code}`}
+            tz={data.from.timezone}
+            sunTimes={data.from.sunTimes}
+            utcWindowStart={timeline.windowStart}
+            utcWindowEnd={timeline.windowEnd}
+            heightPx={timeline.heightPx}
+            pxPerMs={timeline.pxPerMs}
+            side="left"
+          />
+          <CityColumn
+            title={`${data.to.code}`}
+            tz={data.to.timezone}
+            sunTimes={data.to.sunTimes}
+            utcWindowStart={timeline.windowStart}
+            utcWindowEnd={timeline.windowEnd}
+            heightPx={timeline.heightPx}
+            pxPerMs={timeline.pxPerMs}
+            side="right"
+          />
+
           </div>
 
+          {/* Legend */}
           <div style={{ marginTop: 18 }}>
             <div style={{ fontWeight: 700, color: COLORS.text, marginBottom: 8 }}>Legend</div>
-            <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 18, height: 18, background: COLORS.night, borderRadius: 4, border: `1px solid ${COLORS.rail}` }} />
                 <span style={{ fontSize: 13 }}>Night</span>
