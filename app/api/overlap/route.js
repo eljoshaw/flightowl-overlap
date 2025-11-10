@@ -64,12 +64,11 @@ function buildContinuousIntervals(sunResultsYesterday, sunResultsToday, sunResul
   return out;
 }
 
-// ---------- find overlap segments ----------
-// ---------- find overlap segments across 3 days (continuous UTC timeline) ----------
-function findOverlapSegments(intervalsA, intervalsB, d0) {
+// ---------- find overlap segments across 3 days (with UTC + local times) ----------
+function findOverlapSegments(intervalsA, intervalsB, d0, fromTZ, toTZ) {
   const rawSegments = [];
 
-  // Compare all daylight/nighttime intervals (which already include -1, 0, +1 days)
+  // Find all overlapping intervals across the 3-day continuous UTC window
   for (const [aStart, aEnd] of intervalsA) {
     for (const [bStart, bEnd] of intervalsB) {
       const start = Math.max(aStart, bStart);
@@ -82,30 +81,38 @@ function findOverlapSegments(intervalsA, intervalsB, d0) {
     return { overlap: false, totalMinutes: 0, segments: [] };
   }
 
-  // Sort and merge adjacent or overlapping ranges
+  // Sort and merge overlapping segments
   rawSegments.sort((x, y) => x[0] - y[0]);
   const merged = [];
   let cur = rawSegments[0].slice();
   for (let i = 1; i < rawSegments.length; i++) {
     const [s, e] = rawSegments[i];
-    if (s <= cur[1]) {
-      cur[1] = Math.max(cur[1], e); // merge if overlapping
-    } else {
-      merged.push(cur);
-      cur = [s, e];
-    }
+    if (s <= cur[1]) cur[1] = Math.max(cur[1], e);
+    else { merged.push(cur); cur = [s, e]; }
   }
   merged.push(cur);
 
-  // Now convert to UTC datetime segments
+  // Convert to UTC + local datetime segments
   const total = merged.reduce((sum, [s, e]) => sum + (e - s), 0);
   const segments = merged.map(([s, e]) => {
-    const startUTC = new Date(d0.getTime() + s * 60000).toISOString();
-    const endUTC = new Date(d0.getTime() + e * 60000).toISOString();
+    const startUTCDate = new Date(d0.getTime() + s * 60000);
+    const endUTCDate = new Date(d0.getTime() + e * 60000);
+
+    // Format helper
+    const fmtLocal = (d, tz) =>
+      d.toLocaleString('sv-SE', {
+        timeZone: tz,
+        timeZoneName: 'shortOffset',
+      }).replace(' ', 'T'); // ISO-like style
+
     return {
-      startUTC,
-      endUTC,
-      minutes: e - s
+      startUTC: startUTCDate.toISOString(),
+      endUTC: endUTCDate.toISOString(),
+      minutes: e - s,
+      fromStartLocal: fmtLocal(startUTCDate, fromTZ),
+      fromEndLocal: fmtLocal(endUTCDate, fromTZ),
+      toStartLocal: fmtLocal(startUTCDate, toTZ),
+      toEndLocal: fmtLocal(endUTCDate, toTZ)
     };
   });
 
@@ -115,6 +122,7 @@ function findOverlapSegments(intervalsA, intervalsB, d0) {
     segments
   };
 }
+
 
 // ---------- fetch airport ----------
 async function getAirportByIATA(iata) {
@@ -201,8 +209,8 @@ export async function GET(req) {
     const AIntervals = buildContinuousIntervals(A_m1, A_0, A_p1);
     const BIntervals = buildContinuousIntervals(B_m1, B_0, B_p1);
 
-    const daylight = findOverlapSegments(AIntervals.daylight, BIntervals.daylight, d0);
-    const nighttime = findOverlapSegments(AIntervals.nighttime, BIntervals.nighttime, d0);
+    const daylight = findOverlapSegments(AIntervals.daylight, BIntervals.daylight, d0, A.timezone, B.timezone);
+    const nighttime = findOverlapSegments(AIntervals.nighttime, BIntervals.nighttime, d0, A.timezone, B.timezone);
 
     return NextResponse.json({
       meta: {
