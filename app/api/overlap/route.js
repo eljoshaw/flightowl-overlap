@@ -194,37 +194,64 @@ export async function GET(req) {
     // 5) Return everything
     return NextResponse.json({
       meta: {
-        dateUTC: d0.toISOString().slice(0,10),
-        windowUTC: '00:00–24:00'
+        requestedDateUTC: d0.toISOString().slice(0, 10),
+        windowUTC: "00:00–24:00"
       },
-        from: {
-          code: A.iata,
-          name: A.name,
-          country: A.country,
-          timezone: A.timezone,
-          daysUTC: {
-            yesterday: { sunrise: A_m1.sunriseUTC, sunset: A_m1.sunsetUTC },
-            today:     { sunrise: A_0.sunriseUTC,  sunset: A_0.sunsetUTC },
-            tomorrow:  { sunrise: A_p1.sunriseUTC, sunset: A_p1.sunsetUTC }
+    
+      from: {
+        code: A.iata,
+        name: A.name,
+        country: A.country,
+        timezone: A.timezone,
+        sunTimesUTC: [
+          {
+            date: dM1.toISOString().slice(0,10),
+            sunriseUTC: `${dM1.toISOString().slice(0,10)}T${A_m1.sunriseUTC}:00Z`,
+            sunsetUTC:  `${dM1.toISOString().slice(0,10)}T${A_m1.sunsetUTC}:00Z`
+          },
+          {
+            date: d0.toISOString().slice(0,10),
+            sunriseUTC: `${d0.toISOString().slice(0,10)}T${A_0.sunriseUTC}:00Z`,
+            sunsetUTC:  `${d0.toISOString().slice(0,10)}T${A_0.sunsetUTC}:00Z`
+          },
+          {
+            date: dP1.toISOString().slice(0,10),
+            sunriseUTC: `${dP1.toISOString().slice(0,10)}T${A_p1.sunriseUTC}:00Z`,
+            sunsetUTC:  `${dP1.toISOString().slice(0,10)}T${A_p1.sunsetUTC}:00Z`
           }
-        },
-        to: {
-          code: B.iata,
-          name: B.name,
-          country: B.country,
-          timezone: B.timezone,
-          daysUTC: {
-            yesterday: { sunrise: B_m1.sunriseUTC, sunset: B_m1.sunsetUTC },
-            today:     { sunrise: B_0.sunriseUTC,  sunset: B_0.sunsetUTC },
-            tomorrow:  { sunrise: B_p1.sunriseUTC, sunset: B_p1.sunsetUTC }
+        ]
+      },
+    
+      to: {
+        code: B.iata,
+        name: B.name,
+        country: B.country,
+        timezone: B.timezone,
+        sunTimesUTC: [
+          {
+            date: dM1.toISOString().slice(0,10),
+            sunriseUTC: `${dM1.toISOString().slice(0,10)}T${B_m1.sunriseUTC}:00Z`,
+            sunsetUTC:  `${dM1.toISOString().slice(0,10)}T${B_m1.sunsetUTC}:00Z`
+          },
+          {
+            date: d0.toISOString().slice(0,10),
+            sunriseUTC: `${d0.toISOString().slice(0,10)}T${B_0.sunriseUTC}:00Z`,
+            sunsetUTC:  `${d0.toISOString().slice(0,10)}T${B_0.sunsetUTC}:00Z`
+          },
+          {
+            date: dP1.toISOString().slice(0,10),
+            sunriseUTC: `${dP1.toISOString().slice(0,10)}T${B_p1.sunriseUTC}:00Z`,
+            sunsetUTC:  `${dP1.toISOString().slice(0,10)}T${B_p1.sunsetUTC}:00Z`
           }
-        },
-
+        ]
+      },
+    
       overlap: {
-        daylight,   // {overlap, totalMinutes, segments:[{startUTC,endUTC,minutes}]}
-        nighttime   // same shape
+        daylight,
+        nighttime
       }
     });
+
 
   } catch (e) {
     return NextResponse.json({ error: e.message || 'Unknown error' }, { status: 500 });
