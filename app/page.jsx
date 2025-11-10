@@ -127,67 +127,133 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
  * - overlay "day" blocks positioned absolutely by UTC time within window
  * - labels: city code, top/bottom local time range
  */
-function CityColumn({ title, tz, sunTimes, utcWindowStart, utcWindowEnd, heightPx, pxPerMs }) {
-  const daylight = useMemo(
-    () => buildDaylightUTC(sunTimes, utcWindowStart, utcWindowEnd),
-    [sunTimes, utcWindowStart, utcWindowEnd]
-  );
-
-  const dayBlocks = daylight.map((iv, idx) => {
-    const startMs = iv.start.getTime() - utcWindowStart.getTime();
-    const durMs = iv.end.getTime() - iv.start.getTime();
-    const top = startMs * pxPerMs;
-    const h = Math.max(1, durMs * pxPerMs); // avoid 0px
-
-    return (
-      <div
-        key={idx}
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top,
-          height: h,
-          background: COLORS.day,
-          border: `1px solid ${COLORS.rail}`,
-          boxSizing: 'border-box',
-          borderRadius: 6,
-        }}
-        title={`${formatLocal(iv.start, tz)} → ${formatLocal(iv.end, tz)} (Day)`}
-      />
-    );
-  });
-
-  const localStartLabel = formatLocal(utcWindowStart, tz);
-  const localEndLabel   = formatLocal(utcWindowEnd, tz);
-
-  return (
-    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 8 }}>
-        <div style={{ fontWeight: 700, color: COLORS.text, fontSize: 16 }}>{title}</div>
-        <div style={{ fontSize: 12, color: '#555' }}>{tz}</div>
-        <div style={{ marginTop: 6, fontSize: 12, color: COLORS.text }}>
-          <div><strong>Start:</strong> {localStartLabel}</div>
-          <div><strong>End:</strong> {localEndLabel}</div>
+    function CityColumn({ title, tz, sunTimes, utcWindowStart, utcWindowEnd, heightPx, pxPerMs, side = 'left' }) {
+      // --- build daylight intervals ---
+      const daylight = useMemo(
+        () => buildDaylightUTC(sunTimes, utcWindowStart, utcWindowEnd),
+        [sunTimes, utcWindowStart, utcWindowEnd]
+      );
+    
+      // --- find sunrise/sunset for the main (middle) day ---
+      const mainDay = sunTimes?.[1];
+      const sunrise = mainDay ? new Date(mainDay.sunriseUTC) : null;
+      const sunset = mainDay ? new Date(mainDay.sunsetUTC) : null;
+    
+      // --- compute local midnight for that day in this tz ---
+      const localMidnight = mainDay ? new Date(`${mainDay.date}T00:00:00Z`) : null;
+    
+      // --- convert to vertical positions ---
+      const posFor = (dt) => (dt ? (dt.getTime() - utcWindowStart.getTime()) * pxPerMs : null);
+      const yMidnight = posFor(localMidnight);
+      const ySunrise = posFor(sunrise);
+      const ySunset = posFor(sunset);
+    
+      // --- draw daylight blocks ---
+      const dayBlocks = daylight.map((iv, idx) => {
+        const startMs = iv.start.getTime() - utcWindowStart.getTime();
+        const durMs = iv.end.getTime() - iv.start.getTime();
+        const top = startMs * pxPerMs;
+        const h = Math.max(1, durMs * pxPerMs);
+    
+        return (
+          <div
+            key={idx}
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top,
+              height: h,
+              background: COLORS.day,
+              border: `1px solid ${COLORS.rail}`,
+              borderRadius: 6,
+            }}
+            title={`${formatLocal(iv.start, tz)} → ${formatLocal(iv.end, tz)} (Day)`}
+          />
+        );
+      });
+    
+      // --- labels for key events ---
+      const labelStyle = (y) => ({
+        position: 'absolute',
+        top: y,
+        [side === 'left' ? 'left' : 'right']: side === 'left' ? '-6.5rem' : '-6.5rem',
+        textAlign: side === 'left' ? 'right' : 'left',
+        fontSize: 11,
+        color: COLORS.text,
+        transform: 'translateY(-50%)',
+        whiteSpace: 'nowrap',
+      });
+    
+      const labelLine = (y) => ({
+        position: 'absolute',
+        top: y,
+        left: 0,
+        right: 0,
+        height: 1,
+        background: '#aaa',
+        opacity: 0.4,
+      });
+    
+      const timeLabel = (dt) => (dt ? formatLocal(dt, tz).split(' ')[1] : '');
+    
+      const labels = (
+        <>
+          {yMidnight && (
+            <>
+              <div style={labelLine(yMidnight)} />
+              <div style={labelStyle(yMidnight)}>🕛 {timeLabel(localMidnight)} midnight</div>
+            </>
+          )}
+          {ySunrise && (
+            <>
+              <div style={labelLine(ySunrise)} />
+              <div style={labelStyle(ySunrise)}>🌅 {timeLabel(sunrise)} sunrise</div>
+            </>
+          )}
+          {ySunset && (
+            <>
+              <div style={labelLine(ySunset)} />
+              <div style={labelStyle(ySunset)}>🌇 {timeLabel(sunset)} sunset</div>
+            </>
+          )}
+        </>
+      );
+    
+      // --- local labels for top/bottom ---
+      const localStartLabel = formatLocal(utcWindowStart, tz);
+      const localEndLabel = formatLocal(utcWindowEnd, tz);
+    
+      return (
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          {/* Header */}
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontWeight: 700, color: COLORS.text, fontSize: 16 }}>{title}</div>
+            <div style={{ fontSize: 12, color: '#555' }}>{tz}</div>
+            <div style={{ marginTop: 6, fontSize: 12, color: COLORS.text }}>
+              <div><strong>Start:</strong> {localStartLabel}</div>
+              <div><strong>End:</strong> {localEndLabel}</div>
+            </div>
+          </div>
+    
+          {/* Rail */}
+          <div style={{
+            position: 'relative',
+            background: COLORS.night,
+            border: `1px solid ${COLORS.rail}`,
+            borderRadius: 8,
+            height: heightPx,
+            overflow: 'hidden',
+            width: '50%', // narrower
+            margin: side === 'left' ? '0 auto 0 0' : '0 0 0 auto', // align left/right
+          }}>
+            {dayBlocks}
+            {labels}
+          </div>
         </div>
-      </div>
+      );
+    }
 
-      {/* Rail */}
-      <div style={{
-        position: 'relative',
-        background: COLORS.night,        // night base
-        border: `1px solid ${COLORS.rail}`,
-        borderRadius: 8,
-        height: heightPx,
-        overflow: 'hidden',
-      }}>
-        {/* Day overlays */}
-        {dayBlocks}
-      </div>
-    </div>
-  );
-}
 
 export default function Page() {
   const [from, setFrom] = useState('JFK');
@@ -335,24 +401,27 @@ export default function Page() {
             display: 'flex', gap: 16, alignItems: 'flex-start',
             marginTop: 12
           }}>
-            <CityColumn
-              title={`${data.from.code}`}
-              tz={data.from.timezone}
-              sunTimes={data.from.sunTimes}
-              utcWindowStart={timeline.windowStart}
-              utcWindowEnd={timeline.windowEnd}
-              heightPx={timeline.heightPx}
-              pxPerMs={timeline.pxPerMs}
-            />
-            <CityColumn
-              title={`${data.to.code}`}
-              tz={data.to.timezone}
-              sunTimes={data.to.sunTimes}
-              utcWindowStart={timeline.windowStart}
-              utcWindowEnd={timeline.windowEnd}
-              heightPx={timeline.heightPx}
-              pxPerMs={timeline.pxPerMs}
-            />
+          <CityColumn
+            title={`${data.from.code}`}
+            tz={data.from.timezone}
+            sunTimes={data.from.sunTimes}
+            utcWindowStart={timeline.windowStart}
+            utcWindowEnd={timeline.windowEnd}
+            heightPx={timeline.heightPx}
+            pxPerMs={timeline.pxPerMs}
+            side="left"
+          />
+          <CityColumn
+            title={`${data.to.code}`}
+            tz={data.to.timezone}
+            sunTimes={data.to.sunTimes}
+            utcWindowStart={timeline.windowStart}
+            utcWindowEnd={timeline.windowEnd}
+            heightPx={timeline.heightPx}
+            pxPerMs={timeline.pxPerMs}
+            side="right"
+          />
+
           </div>
 
           {/* Legend */}
