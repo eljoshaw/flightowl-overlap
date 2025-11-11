@@ -483,12 +483,12 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
           <div
             style={{
               position: 'relative',
-              height: timeline.heightPx,
+              minHeight: timeline.heightPx,
               marginTop: 20,
               marginBottom: 40, // gives breathing room for legend
-
             }}
           >
+
             {/* Left column: positioned just to the left of center */}
             <div
               style={{
