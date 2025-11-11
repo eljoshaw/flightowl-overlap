@@ -494,7 +494,7 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
               style={{
                 position: 'absolute',
                 right: '50%',
-                transform: 'translateX(-8px)', // half of center gap
+                transform: `translateX(${columnWidth / 2}px)`,
               }}
             >
               <CityColumn
@@ -518,7 +518,7 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
               style={{
                 position: 'absolute',
                 left: '50%',
-                transform: 'translateX(8px)', // half of center gap
+                transform: `translateX(-${columnWidth / 2}px)`,
               }}
             >
               <CityColumn
