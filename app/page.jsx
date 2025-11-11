@@ -215,8 +215,8 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
               .replace(':00', ':00'); // ensures 2-digit format
           };
       
-          const sunriseLabel = `🌅 Sunrise ${fmtLocalTime(s.sunriseUTC)}`;
-          const sunsetLabel = `🌇 Sunset ${fmtLocalTime(s.sunsetUTC)}`;
+          const sunriseLabel = `☀️ Sunrise ${fmtLocalTime(s.sunriseUTC)}`;
+          const sunsetLabel = `🌙 Sunset ${fmtLocalTime(s.sunsetUTC)}`;
       
           return [
             { y: posFor(sunriseUTC), text: sunriseLabel },
