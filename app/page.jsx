@@ -127,135 +127,131 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
  * - overlay "day" blocks positioned absolutely by UTC time within window
  * - labels: city code, top/bottom local time range
  */
+function CityColumn({ title, tz, sunTimes, utcWindowStart, utcWindowEnd, heightPx, pxPerMs, side = 'left' }) {
+  // --- build daylight intervals ---
+  const daylight = useMemo(
+    () => buildDaylightUTC(sunTimes, utcWindowStart, utcWindowEnd),
+    [sunTimes, utcWindowStart, utcWindowEnd]
+  );
 
-function CityColumn({ city, utcWindowStart, utcWindowEnd, colorDay, colorNight }) {
-  // ⛔️ Guard: don’t render until data exists
-  if (!city || !city.timezone || !city.sunTimes || city.sunTimes.length === 0) {
+  // --- find sunrise/sunset for the main (middle) day ---
+  const mainDay = sunTimes?.[1];
+  const sunrise = mainDay ? new Date(mainDay.sunriseUTC) : null;
+  const sunset = mainDay ? new Date(mainDay.sunsetUTC) : null;
+
+  // --- compute local midnight for that day in this tz ---
+  const localMidnight = mainDay ? new Date(`${mainDay.date}T00:00:00Z`) : null;
+
+  // --- convert to vertical positions ---
+  const posFor = (dt) => (dt ? (dt.getTime() - utcWindowStart.getTime()) * pxPerMs : null);
+  const yMidnight = posFor(localMidnight);
+  const ySunrise = posFor(sunrise);
+  const ySunset = posFor(sunset);
+
+  // --- draw daylight blocks ---
+  const dayBlocks = daylight.map((iv, idx) => {
+    const startMs = iv.start.getTime() - utcWindowStart.getTime();
+    const durMs = iv.end.getTime() - iv.start.getTime();
+    const top = startMs * pxPerMs;
+    const h = Math.max(1, durMs * pxPerMs);
+
     return (
-      <div className="flex flex-col items-center w-1/2">
-        <div className="text-gray-500 text-sm mt-8">Loading city data…</div>
-      </div>
+      <div
+        key={idx}
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top,
+          height: h,
+          background: COLORS.day,
+          border: `1px solid ${COLORS.rail}`,
+          borderRadius: 6,
+        }}
+        title={`${formatLocal(iv.start, tz)} → ${formatLocal(iv.end, tz)} (Day)`}
+      />
     );
-  }
+  });
 
-  const totalDuration =
-    (new Date(utcWindowEnd).getTime() - new Date(utcWindowStart).getTime()) / 60000;
+  // --- labels for key events ---
+  const labelStyle = (y) => ({
+    position: 'absolute',
+    top: y,
+    [side === 'left' ? 'left' : 'right']: side === 'left' ? '0.25rem' : '0.25rem',
+    textAlign: side === 'left' ? 'left' : 'right',
+    fontSize: 11,
+    color: COLORS.text,
+    transform: 'translateY(-50%)',
+    background: 'rgba(255,255,255,0.7)',
+    padding: '0 4px',
+    borderRadius: 3,
+    whiteSpace: 'nowrap',
+  });
 
-  // Convert a UTC timestamp into % of the full UTC window
-  const pctFromUTC = (dt) => {
-    const t = new Date(dt).getTime();
-    const start = new Date(utcWindowStart).getTime();
-    return ((t - start) / (totalDuration * 60000)) * 100;
-  };
 
-  // ✅ Safe conversion: local midnight → UTC Date object
-  const getLocalMidnightUTC = (dateStr, tz, offsetDays = 0) => {
-    try {
-      // build a local midnight in that zone
-      const localDate = new Date(`${dateStr}T00:00:00`);
-      localDate.setUTCDate(localDate.getUTCDate() + offsetDays);
+  const labelLine = (y) => ({
+    position: 'absolute',
+    top: y,
+    left: 0,
+    right: 0,
+    height: 1,
+    background: '#aaa',
+    opacity: 0.4,
+  });
 
-      // use Intl to get numeric timezone offset at that moment
-      const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone: tz,
-        timeZoneName: 'shortOffset',
-      }).formatToParts(localDate);
-      const tzPart = parts.find((p) => p.type === 'timeZoneName')?.value || 'UTC';
+  const timeLabel = (dt) => (dt ? formatLocal(dt, tz).split(' ')[1] : '');
 
-      const match = tzPart.match(/([+-]\d{1,2})(?::?(\d{2}))?/);
-      const hours = match ? parseInt(match[1], 10) : 0;
-      const mins = match?.[2] ? parseInt(match[2], 10) : 0;
-      const offsetMinutes = hours * 60 + (hours >= 0 ? mins : -mins);
+  const labels = (
+    <>
+      {[{ y: yMidnight, dt: localMidnight, icon: '🕛', text: 'midnight' },
+        { y: ySunrise, dt: sunrise, icon: '☀️', text: 'sunrise' },
+        { y: ySunset, dt: sunset, icon: '🌙', text: 'sunset' }]
+        .filter(ev => ev.y !== null && ev.y >= 0 && ev.y <= heightPx)
+        .map((ev, i) => (
+          <React.Fragment key={i}>
+            <div style={labelLine(ev.y)} />
+            <div style={labelStyle(ev.y)}>
+              {ev.icon} {timeLabel(ev.dt)} {ev.text}
+            </div>
+          </React.Fragment>
+        ))}
+    </>
+  );
 
-      // subtract offset to get UTC midnight
-      const utcTime = new Date(localDate.getTime() - offsetMinutes * 60000);
-      return utcTime;
-    } catch (err) {
-      console.error("Error in getLocalMidnightUTC:", err);
-      return new Date(`${dateStr}T00:00:00Z`);
-    }
-  };
 
-  const tz = city.timezone;
-  const dateStr = city.sunTimes?.[1]?.date;
-  const midnightStartUTC = getLocalMidnightUTC(dateStr, tz, 0);
-  const midnightEndUTC = getLocalMidnightUTC(dateStr, tz, 1);
-
-  const midnightLines = [
-    { label: '🕛 00:00 Local', utc: midnightStartUTC },
-    { label: '🕛 24:00 Local', utc: midnightEndUTC },
-  ];
+  // --- local labels for top/bottom ---
+  const localStartLabel = formatLocal(utcWindowStart, tz);
+  const localEndLabel = formatLocal(utcWindowEnd, tz);
 
   return (
-    <div className="flex flex-col items-center w-1/2 relative">
-      <h3 className="font-semibold mb-2">{city.name}</h3>
-      <div
-        className="relative w-3 rounded-md overflow-hidden bg-gray-200"
-        style={{ height: '500px' }}
-      >
-        {/* Day/night background */}
-        {city.sunTimes.map((s, i) => {
-          const sunrise = new Date(s.sunriseUTC);
-          const sunset = new Date(s.sunsetUTC);
-          const startPct = pctFromUTC(sunrise);
-          const endPct = pctFromUTC(sunset);
-          return (
-            <React.Fragment key={i}>
-              <div
-                style={{
-                  position: 'absolute',
-                  top: `${startPct}%`,
-                  height: `${endPct - startPct}%`,
-                  backgroundColor: colorDay,
-                  width: '100%',
-                }}
-              ></div>
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  height: `${startPct}%`,
-                  backgroundColor: colorNight,
-                  width: '100%',
-                }}
-              ></div>
-              <div
-                style={{
-                  position: 'absolute',
-                  top: `${endPct}%`,
-                  height: `${100 - endPct}%`,
-                  backgroundColor: colorNight,
-                  width: '100%',
-                }}
-              ></div>
-            </React.Fragment>
-          );
-        })}
+    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontWeight: 700, color: COLORS.text, fontSize: 16 }}>{title}</div>
+        <div style={{ fontSize: 12, color: '#555' }}>{tz}</div>
+        <div style={{ marginTop: 6, fontSize: 12, color: COLORS.text }}>
+          <div><strong>Start:</strong> {localStartLabel}</div>
+          <div><strong>End:</strong> {localEndLabel}</div>
+        </div>
+      </div>
 
-        {/* Midnight lines */}
-        {midnightLines.map((m, i) => (
-          <div
-            key={i}
-            className="absolute left-0 w-full border-t border-gray-400"
-            style={{ top: `${pctFromUTC(m.utc)}%` }}
-          >
-            <span
-              className={`absolute ${
-                i === 0 ? '-left-24 text-right' : 'left-full ml-2 text-left'
-              } text-xs text-gray-700`}
-            >
-              {m.label}
-            </span>
-          </div>
-        ))}
+      {/* Rail */}
+      <div style={{
+        position: 'relative',
+        background: COLORS.night,
+        border: `1px solid ${COLORS.rail}`,
+        borderRadius: 8,
+        height: heightPx,
+        overflow: 'visible',
+        width: '50%', // narrower
+        margin: side === 'left' ? '0 auto 0 0' : '0 0 0 auto', // align left/right
+      }}>
+        {dayBlocks}
+        {labels}
       </div>
     </div>
   );
 }
-
-
-
-
 
 export default function Page() {
   const [from, setFrom] = useState('JFK');
