@@ -127,127 +127,141 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
  * - overlay "day" blocks positioned absolutely by UTC time within window
  * - labels: city code, top/bottom local time range
  */
-function CityColumn({ title, tz, sunTimes, utcWindowStart, utcWindowEnd, heightPx, pxPerMs, side = 'left' }) {
-  // --- build daylight intervals ---
-  const daylight = useMemo(
-    () => buildDaylightUTC(sunTimes, utcWindowStart, utcWindowEnd),
-    [sunTimes, utcWindowStart, utcWindowEnd]
-  );
+function CityColumn({ city, utcWindowStart, utcWindowEnd, colorDay, colorNight }) {
+  const totalDuration =
+    (new Date(utcWindowEnd).getTime() - new Date(utcWindowStart).getTime()) / 60000; // minutes
 
-  // --- find sunrise/sunset for the main (middle) day ---
-  const mainDay = sunTimes?.[1];
-  const sunrise = mainDay ? new Date(mainDay.sunriseUTC) : null;
-  const sunset = mainDay ? new Date(mainDay.sunsetUTC) : null;
+  // Helper: convert a given UTC datetime to percentage along the UTC window
+  function pctFromUTC(dt) {
+    const t = new Date(dt).getTime();
+    const start = new Date(utcWindowStart).getTime();
+    return ((t - start) / (totalDuration * 60000)) * 100;
+  }
 
-  // --- compute local midnight for that day in this tz ---
-  const localMidnight = mainDay ? new Date(`${mainDay.date}T00:00:00Z`) : null;
-
-  // --- convert to vertical positions ---
-  const posFor = (dt) => (dt ? (dt.getTime() - utcWindowStart.getTime()) * pxPerMs : null);
-  const yMidnight = posFor(localMidnight);
-  const ySunrise = posFor(sunrise);
-  const ySunset = posFor(sunset);
-
-  // --- draw daylight blocks ---
-  const dayBlocks = daylight.map((iv, idx) => {
-    const startMs = iv.start.getTime() - utcWindowStart.getTime();
-    const durMs = iv.end.getTime() - iv.start.getTime();
-    const top = startMs * pxPerMs;
-    const h = Math.max(1, durMs * pxPerMs);
-
-    return (
-      <div
-        key={idx}
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top,
-          height: h,
-          background: COLORS.day,
-          border: `1px solid ${COLORS.rail}`,
-          borderRadius: 6,
-        }}
-        title={`${formatLocal(iv.start, tz)} → ${formatLocal(iv.end, tz)} (Day)`}
-      />
+  // Helper: convert 00:00 local of a given date to UTC datetime
+  function localMidnightUTC(dateStr, tz, dayOffset = 0) {
+    const base = new Date(`${dateStr}T00:00:00`);
+    // move base date by offset days
+    base.setUTCDate(base.getUTCDate() + dayOffset);
+    // convert to the equivalent UTC instant for local midnight
+    const utcTime = new Date(
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        hour12: false,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }).formatToParts(base)
     );
-  });
+    // That won’t work directly — simpler:
+    const localMid = new Date(
+      new Date(`${dateStr}T00:00:00`).toLocaleString('en-US', { timeZone: tz })
+    );
+    return localMid;
+  }
 
-  // --- labels for key events ---
-  const labelStyle = (y) => ({
-    position: 'absolute',
-    top: y,
-    [side === 'left' ? 'left' : 'right']: side === 'left' ? '0.25rem' : '0.25rem',
-    textAlign: side === 'left' ? 'left' : 'right',
-    fontSize: 11,
-    color: COLORS.text,
-    transform: 'translateY(-50%)',
-    background: 'rgba(255,255,255,0.7)',
-    padding: '0 4px',
-    borderRadius: 3,
-    whiteSpace: 'nowrap',
-  });
+  // Compute both midnights (start and end) in UTC
+  const mainDay = city.sunTimes?.find((d) => d.date === city.sunTimes[1]?.date); // today's entry
+  const tz = city.timezone;
+  const dateStr = mainDay?.date || "2025-11-09";
 
-
-  const labelLine = (y) => ({
-    position: 'absolute',
-    top: y,
-    left: 0,
-    right: 0,
-    height: 1,
-    background: '#aaa',
-    opacity: 0.4,
-  });
-
-  const timeLabel = (dt) => (dt ? formatLocal(dt, tz).split(' ')[1] : '');
-
-  const labels = (
-    <>
-      {[{ y: yMidnight, dt: localMidnight, icon: '🕛', text: 'midnight' },
-        { y: ySunrise, dt: sunrise, icon: '☀️', text: 'sunrise' },
-        { y: ySunset, dt: sunset, icon: '🌙', text: 'sunset' }]
-        .filter(ev => ev.y !== null && ev.y >= 0 && ev.y <= heightPx)
-        .map((ev, i) => (
-          <React.Fragment key={i}>
-            <div style={labelLine(ev.y)} />
-            <div style={labelStyle(ev.y)}>
-              {ev.icon} {timeLabel(ev.dt)} {ev.text}
-            </div>
-          </React.Fragment>
-        ))}
-    </>
+  const midnightStartUTC = new Date(
+    new Date(`${dateStr}T00:00:00`).getTime() -
+      new Date().toLocaleString('en-US', { timeZone: tz })?.includes('GMT+')
+        ? 0
+        : 0
   );
 
+  // Instead of the above, a cleaner DST-aware way:
+  const getLocalToUTC = (localDate, tz) => {
+    const d = new Date(localDate);
+    const utcStr = d.toLocaleString('en-US', { timeZone: 'UTC' });
+    const localStr = d.toLocaleString('en-US', { timeZone: tz });
+    const diffMs = new Date(localStr) - new Date(utcStr);
+    return new Date(d.getTime() - diffMs);
+  };
 
-  // --- local labels for top/bottom ---
-  const localStartLabel = formatLocal(utcWindowStart, tz);
-  const localEndLabel = formatLocal(utcWindowEnd, tz);
+  const midnight0UTC = getLocalToUTC(`${dateStr}T00:00:00`, tz);
+  const midnight24UTC = getLocalToUTC(
+    new Date(`${dateStr}T00:00:00`).getTime() + 24 * 60 * 60 * 1000,
+    tz
+  );
+
+  const midnightLines = [
+    { label: '🕛 00:00 Local', utc: midnight0UTC },
+    { label: '🕛 24:00 Local', utc: midnight24UTC },
+  ];
 
   return (
-    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 8 }}>
-        <div style={{ fontWeight: 700, color: COLORS.text, fontSize: 16 }}>{title}</div>
-        <div style={{ fontSize: 12, color: '#555' }}>{tz}</div>
-        <div style={{ marginTop: 6, fontSize: 12, color: COLORS.text }}>
-          <div><strong>Start:</strong> {localStartLabel}</div>
-          <div><strong>End:</strong> {localEndLabel}</div>
-        </div>
-      </div>
+    <div className="flex flex-col items-center w-1/2 relative">
+      <h3 className="font-semibold mb-2">{city.name}</h3>
+      <div className="relative w-3 rounded-md overflow-hidden bg-gray-200" style={{ height: '500px' }}>
+        {/* Background segments */}
+        {city.sunTimes &&
+          city.sunTimes.map((s, i) => {
+            const sunrise = new Date(s.sunriseUTC);
+            const sunset = new Date(s.sunsetUTC);
+            const dayStart = pctFromUTC(sunrise);
+            const dayEnd = pctFromUTC(sunset);
+            const dayHeight = dayEnd - dayStart;
 
-      {/* Rail */}
-      <div style={{
-        position: 'relative',
-        background: COLORS.night,
-        border: `1px solid ${COLORS.rail}`,
-        borderRadius: 8,
-        height: heightPx,
-        overflow: 'visible',
-        width: '50%', // narrower
-        margin: side === 'left' ? '0 auto 0 0' : '0 0 0 auto', // align left/right
-      }}>
-        {dayBlocks}
-        {labels}
+            return (
+              <React.Fragment key={i}>
+                {/* Daytime */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: `${dayStart}%`,
+                    height: `${dayHeight}%`,
+                    backgroundColor: colorDay,
+                    width: '100%',
+                  }}
+                ></div>
+                {/* Nighttime above */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    height: `${dayStart}%`,
+                    backgroundColor: colorNight,
+                    width: '100%',
+                  }}
+                ></div>
+                {/* Nighttime below */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: `${dayEnd}%`,
+                    height: `${100 - dayEnd}%`,
+                    backgroundColor: colorNight,
+                    width: '100%',
+                  }}
+                ></div>
+              </React.Fragment>
+            );
+          })}
+
+        {/* Midnight markers */}
+        {midnightLines.map((m, i) => (
+          <div
+            key={i}
+            className="absolute left-0 w-full border-t border-gray-400"
+            style={{
+              top: `${pctFromUTC(m.utc)}%`,
+            }}
+          >
+            <span
+              className={`absolute ${
+                i === 0 ? '-left-24 text-right' : 'left-full ml-2 text-left'
+              } text-xs text-gray-700`}
+            >
+              {m.label}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
