@@ -483,9 +483,9 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
           <div
             style={{
               position: 'relative',
-              minHeight: timeline.heightPx,
+              minHeight: timeline.heightPx + 80, // ensures the container is taller than the columns
               marginTop: 20,
-              marginBottom: 40, // gives breathing room for legend
+              paddingBottom: 80, // reserves clear space for legend
             }}
           >
 
