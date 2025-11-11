@@ -470,3 +470,22 @@ export default function Page() {
                   }}
                 />
                 <span style
+                    <span
+                  style={{
+                    width: 18,
+                    height: 18,
+                    background: COLORS.day,
+                    borderRadius: 4,
+                    border: `1px solid ${COLORS.rail}`,
+                  }}
+                />
+              <span style={{ fontSize: 13 }}>Daylight</span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
