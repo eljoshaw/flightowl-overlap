@@ -268,8 +268,8 @@ function CityColumn({
                     zIndex: 2, // sits above background but below text labels
                   }}
                 />
-                {/* Label for full hours only */}
-                {label.endsWith(':00') && (
+                {/* Label every hour (works for half-hour and 45-min offsets) */}
+                {(i % 1 === 0) && (
                   <div
                     style={{
                       position: 'absolute',
@@ -284,6 +284,7 @@ function CityColumn({
                     {label}
                   </div>
                 )}
+
               </React.Fragment>
             );
           });
