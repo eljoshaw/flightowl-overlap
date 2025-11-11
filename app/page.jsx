@@ -270,44 +270,21 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
         </div>
   
         {/* Rail */}
-        <div style={{ 
-        display: 'flex', 
-        flexDirection: side === 'left' ? 'row' : 'row-reverse',
-        alignItems: 'stretch',
-        gap: '8px',
-      }}>
-        {/* Label area (outside the bar) */}
-        <div style={{ 
-          position: 'relative', 
-          width: '60px', // or 80px for more room
-          height: heightPx, 
+        <div style={{
+          position: 'relative',
+          background: COLORS.night,
+          border: `1px solid ${COLORS.rail}`,
+          borderRadius: 8,
+          height: heightPx,
+          overflow: 'visible',
+          width: '50%', // narrower
+          margin: side === 'left' ? '0 auto 0 0' : '0 0 0 auto', // align left/right
         }}>
-          {eventLabels.map((label, i) => (
-            <div key={i} style={{ position: 'absolute', top: label.props.children[0].props.style.top }}>
-              {label.props.children[1]}
-            </div>
-          ))}
-        </div>
-      
-        {/* The actual timeline bar */}
-        <div
-          style={{
-            position: 'relative',
-            flex: 1,
-            minWidth: 0,
-            background: COLORS.night,
-            border: `1px solid ${COLORS.rail}`,
-            borderRadius: 8,
-            height: heightPx,
-            overflow: 'visible',
-          }}
-        >
           {dayBlocks}
-          {/* just the horizontal lines */}
-          {eventLabels.map((label, i) => label.props.children[0])}
+          {labels}
+          {eventLabels}
         </div>
       </div>
-
     );
   }
 
