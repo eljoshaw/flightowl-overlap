@@ -497,39 +497,42 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
               overflowX: 'hidden',            // prevent side scrollbars
             }}
           >
-            <div style={{ transform: 'translateX(12px)' }}>
-              <CityColumn
-                title={data.from.code}
-                tz={data.from.timezone}
-                sunTimes={data.from.sunTimes}
-                otherSunTimes={data.to.sunTimes}
-                otherCode={data.to.code}
-                midnights={data.from.midnights}
-                utcWindowStart={timeline.windowStart}
-                utcWindowEnd={timeline.windowEnd}
-                heightPx={timeline.heightPx}
-                pxPerMs={timeline.pxPerMs}
-                side="left"
-                columnWidth={columnWidth}
-              />
-            </div>
-            
-            <div style={{ transform: 'translateX(-12px)' }}>
-              <CityColumn
-                title={data.to.code}
-                tz={data.to.timezone}
-                sunTimes={data.to.sunTimes}
-                otherSunTimes={data.from.sunTimes}
-                otherCode={data.from.code}
-                midnights={data.to.midnights}
-                utcWindowStart={timeline.windowStart}
-                utcWindowEnd={timeline.windowEnd}
-                heightPx={timeline.heightPx}
-                pxPerMs={timeline.pxPerMs}
-                side="right"
-                columnWidth={columnWidth}
-              />
-            </div>
+          {/* Left column — anchored to centerline */}
+          <div style={{ transform: `translateX(${columnWidth / 2}px)` }}>
+            <CityColumn
+              title={data.from.code}
+              tz={data.from.timezone}
+              sunTimes={data.from.sunTimes}
+              otherSunTimes={data.to.sunTimes}
+              otherCode={data.to.code}
+              midnights={data.from.midnights}
+              utcWindowStart={timeline.windowStart}
+              utcWindowEnd={timeline.windowEnd}
+              heightPx={timeline.heightPx}
+              pxPerMs={timeline.pxPerMs}
+              side="left"
+              columnWidth={columnWidth}
+            />
+          </div>
+          
+          {/* Right column — anchored to centerline */}
+          <div style={{ transform: `translateX(-${columnWidth / 2}px)` }}>
+            <CityColumn
+              title={data.to.code}
+              tz={data.to.timezone}
+              sunTimes={data.to.sunTimes}
+              otherSunTimes={data.from.sunTimes}
+              otherCode={data.from.code}
+              midnights={data.to.midnights}
+              utcWindowStart={timeline.windowStart}
+              utcWindowEnd={timeline.windowEnd}
+              heightPx={timeline.heightPx}
+              pxPerMs={timeline.pxPerMs}
+              side="right"
+              columnWidth={columnWidth}
+            />
+          </div>
+
 
           </div>
 
