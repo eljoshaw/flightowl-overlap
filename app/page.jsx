@@ -198,14 +198,32 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
       { y: yMidnightEnd, text: '🕛 24:00 Local' },
     ];
         // --- sunrise/sunset labels from API ---
-    const sunLabels = (sunTimes || []).flatMap((s, i) => {
-      const sunriseUTC = new Date(s.sunriseUTC);
-      const sunsetUTC = new Date(s.sunsetUTC);
-      return [
-        { y: posFor(sunriseUTC), text: '🌅 Sunrise' },
-        { y: posFor(sunsetUTC), text: '🌇 Sunset' },
-      ];
-    });
+        // --- sunrise/sunset labels with local time ---
+        const sunLabels = (sunTimes || []).flatMap((s, i) => {
+          const sunriseUTC = new Date(s.sunriseUTC);
+          const sunsetUTC = new Date(s.sunsetUTC);
+      
+          // Format local time label (just HH:MM)
+          const fmtLocalTime = (isoStr) => {
+            const d = new Date(isoStr);
+            return d
+              .toLocaleTimeString('en-GB', {
+                timeZone: tz,
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+              .replace(':00', ':00'); // ensures 2-digit format
+          };
+      
+          const sunriseLabel = `🌅 Sunrise ${fmtLocalTime(s.sunriseUTC)}`;
+          const sunsetLabel = `🌇 Sunset ${fmtLocalTime(s.sunsetUTC)}`;
+      
+          return [
+            { y: posFor(sunriseUTC), text: sunriseLabel },
+            { y: posFor(sunsetUTC), text: sunsetLabel },
+          ];
+        });
+
   
     const eventLabels = [...midnightLabels, ...sunLabels]
       .filter(ev => ev.y !== null && ev.y >= 0 && ev.y <= heightPx)
