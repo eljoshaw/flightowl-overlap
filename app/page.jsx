@@ -182,11 +182,8 @@ function CityColumn({
     const sunsetUTC = new Date(s.sunsetUTC);
     const sunriseLabel = `${otherCode} Sunrise`;
     const sunsetLabel = `${otherCode} Sunset`;
-
-    // These times are already translated into this city's TZ by backend.
     const sunriseTime = s.translatedForOther?.sunriseLocal?.match(/(\d{2}:\d{2})/)?.[1];
     const sunsetTime = s.translatedForOther?.sunsetLocal?.match(/(\d{2}:\d{2})/)?.[1];
-
     return [
       { y: posFor(sunriseUTC), text: `${sunriseLabel} ${sunriseTime || ''}` },
       { y: posFor(sunsetUTC), text: `${sunsetLabel} ${sunsetTime || ''}` },
@@ -469,38 +466,12 @@ export default function Page() {
                     border: `1px solid ${COLORS.rail}`,
                   }}
                 />
-<div style={{ marginTop: 18 }}>
-  <div style={{ fontWeight: 700, color: COLORS.text, marginBottom: 8 }}>Legend</div>
-  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span
-        style={{
-          width: 18,
-          height: 18,
-          background: COLORS.night,
-          borderRadius: 4,
-          border: `1px solid ${COLORS.rail}`,
-        }}
-      />
-      <span style={{ fontSize: 13 }}>Night</span>
+                <span style={{ fontSize: 13 }}>Daylight</span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
-
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span
-        style={{
-          width: 18,
-          height: 18,
-          background: COLORS.day,
-          borderRadius: 4,
-          border: `1px solid ${COLORS.rail}`,
-        }}
-      />
-      <span style={{ fontSize: 13 }}>Daylight</span>
-    </div>
-  </div>
-</div>
-</>
-)}
-</div>
-);
+  );
 }
