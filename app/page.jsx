@@ -538,9 +538,19 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
             </div>
           </div>
 
-          <div style={{ marginTop: 18 }}>
-            <div style={{ fontWeight: 700, color: COLORS.text, marginBottom: 8 }}>Legend</div>
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ marginTop: 18, textAlign: 'center' }}>
+              <div style={{ fontWeight: 700, color: COLORS.text, marginBottom: 8 }}>Legend</div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: 16,
+                  flexWrap: 'wrap',
+                  width: '100%',
+                  margin: '0 auto',
+                }}
+              >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span
                   style={{
