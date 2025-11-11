@@ -520,7 +520,6 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
                 side="right"
                 columnWidth={columnWidth}
               />
-            </div>
           </div>
 
             <div style={{ marginTop: 18, textAlign: 'center' }}>
