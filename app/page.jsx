@@ -127,115 +127,82 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
  * - overlay "day" blocks positioned absolutely by UTC time within window
  * - labels: city code, top/bottom local time range
  */
+
 function CityColumn({ city, utcWindowStart, utcWindowEnd, colorDay, colorNight }) {
   const totalDuration =
     (new Date(utcWindowEnd).getTime() - new Date(utcWindowStart).getTime()) / 60000; // minutes
 
-  // Helper: convert a given UTC datetime to percentage along the UTC window
-  function pctFromUTC(dt) {
+  // Convert a UTC timestamp into a percentage of the full UTC window
+  const pctFromUTC = (dt) => {
     const t = new Date(dt).getTime();
     const start = new Date(utcWindowStart).getTime();
     return ((t - start) / (totalDuration * 60000)) * 100;
-  }
-
-  // Helper: convert 00:00 local of a given date to UTC datetime
-  function localMidnightUTC(dateStr, tz, dayOffset = 0) {
-    const base = new Date(`${dateStr}T00:00:00`);
-    // move base date by offset days
-    base.setUTCDate(base.getUTCDate() + dayOffset);
-    // convert to the equivalent UTC instant for local midnight
-    const utcTime = new Date(
-      new Intl.DateTimeFormat('en-US', {
-        timeZone: tz,
-        hour12: false,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      }).formatToParts(base)
-    );
-    // That won’t work directly — simpler:
-    const localMid = new Date(
-      new Date(`${dateStr}T00:00:00`).toLocaleString('en-US', { timeZone: tz })
-    );
-    return localMid;
-  }
-
-  // Compute both midnights (start and end) in UTC
-  const mainDay = city.sunTimes?.find((d) => d.date === city.sunTimes[1]?.date); // today's entry
-  const tz = city.timezone;
-  const dateStr = mainDay?.date || "2025-11-09";
-
-  const midnightStartUTC = new Date(
-    new Date(`${dateStr}T00:00:00`).getTime() -
-      new Date().toLocaleString('en-US', { timeZone: tz })?.includes('GMT+')
-        ? 0
-        : 0
-  );
-
-  // Instead of the above, a cleaner DST-aware way:
-  const getLocalToUTC = (localDate, tz) => {
-    const d = new Date(localDate);
-    const utcStr = d.toLocaleString('en-US', { timeZone: 'UTC' });
-    const localStr = d.toLocaleString('en-US', { timeZone: tz });
-    const diffMs = new Date(localStr) - new Date(utcStr);
-    return new Date(d.getTime() - diffMs);
   };
 
-  const midnight0UTC = getLocalToUTC(`${dateStr}T00:00:00`, tz);
-  const midnight24UTC = getLocalToUTC(
-    new Date(`${dateStr}T00:00:00`).getTime() + 24 * 60 * 60 * 1000,
-    tz
-  );
+  // ✅ Reliable conversion: given "local midnight" in that timezone, return UTC equivalent
+  const getLocalMidnightUTC = (dateStr, tz, offsetDays = 0) => {
+    // start with date 00:00 local
+    const localMidnight = new Date(`${dateStr}T00:00:00`);
+    // add offset days (for 24:00, offsetDays = 1)
+    localMidnight.setUTCDate(localMidnight.getUTCDate() + offsetDays);
+
+    // get the UTC instant corresponding to local 00:00
+    const utcMillis =
+      Date.parse(
+        new Date(localMidnight).toLocaleString('en-US', { timeZone: tz })
+      ) - Date.parse(
+        new Date(localMidnight).toLocaleString('en-US', { timeZone: 'UTC' })
+      );
+
+    return new Date(localMidnight.getTime() - utcMillis);
+  };
+
+  const tz = city.timezone;
+  const dateStr = city.sunTimes?.[1]?.date; // main day (the center of the 3 pulled)
+  const midnightStartUTC = getLocalMidnightUTC(dateStr, tz, 0);
+  const midnightEndUTC = getLocalMidnightUTC(dateStr, tz, 1);
 
   const midnightLines = [
-    { label: '🕛 00:00 Local', utc: midnight0UTC },
-    { label: '🕛 24:00 Local', utc: midnight24UTC },
+    { label: '🕛 00:00 Local', utc: midnightStartUTC },
+    { label: '🕛 24:00 Local', utc: midnightEndUTC },
   ];
 
   return (
     <div className="flex flex-col items-center w-1/2 relative">
       <h3 className="font-semibold mb-2">{city.name}</h3>
       <div className="relative w-3 rounded-md overflow-hidden bg-gray-200" style={{ height: '500px' }}>
-        {/* Background segments */}
+        {/* Day/night background blocks */}
         {city.sunTimes &&
           city.sunTimes.map((s, i) => {
             const sunrise = new Date(s.sunriseUTC);
             const sunset = new Date(s.sunsetUTC);
-            const dayStart = pctFromUTC(sunrise);
-            const dayEnd = pctFromUTC(sunset);
-            const dayHeight = dayEnd - dayStart;
-
+            const startPct = pctFromUTC(sunrise);
+            const endPct = pctFromUTC(sunset);
             return (
               <React.Fragment key={i}>
-                {/* Daytime */}
                 <div
                   style={{
                     position: 'absolute',
-                    top: `${dayStart}%`,
-                    height: `${dayHeight}%`,
+                    top: `${startPct}%`,
+                    height: `${endPct - startPct}%`,
                     backgroundColor: colorDay,
                     width: '100%',
                   }}
                 ></div>
-                {/* Nighttime above */}
                 <div
                   style={{
                     position: 'absolute',
                     top: 0,
-                    height: `${dayStart}%`,
+                    height: `${startPct}%`,
                     backgroundColor: colorNight,
                     width: '100%',
                   }}
                 ></div>
-                {/* Nighttime below */}
                 <div
                   style={{
                     position: 'absolute',
-                    top: `${dayEnd}%`,
-                    height: `${100 - dayEnd}%`,
+                    top: `${endPct}%`,
+                    height: `${100 - endPct}%`,
                     backgroundColor: colorNight,
                     width: '100%',
                   }}
@@ -249,9 +216,7 @@ function CityColumn({ city, utcWindowStart, utcWindowEnd, colorDay, colorNight }
           <div
             key={i}
             className="absolute left-0 w-full border-t border-gray-400"
-            style={{
-              top: `${pctFromUTC(m.utc)}%`,
-            }}
+            style={{ top: `${pctFromUTC(m.utc)}%` }}
           >
             <span
               className={`absolute ${
@@ -266,6 +231,7 @@ function CityColumn({ city, utcWindowStart, utcWindowEnd, colorDay, colorNight }
     </div>
   );
 }
+
 
 export default function Page() {
   const [from, setFrom] = useState('JFK');
