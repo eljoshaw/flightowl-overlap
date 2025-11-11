@@ -297,8 +297,8 @@ function CityColumn({
 }
 
 export default function Page() {
-  const [from, setFrom] = useState('JFK');
-  const [to, setTo] = useState('SYD');
+  const [from, setFrom] = useState('DEPARTURE');
+  const [to, setTo] = useState('ARRIVAL');
   const [date, setDate] = useState('2025-11-09');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -355,7 +355,7 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
   return (
     <div style={{ maxWidth: 980, margin: '0 auto', padding: '16px 16px 80px' }}>
       <h1 style={{ fontSize: 22, margin: 0, color: COLORS.text, fontWeight: 800 }}>
-        FlightOwl · Light Overlap (Vertical · Mobile-first)
+        FlightOwl · Light Overlap Tool
       </h1>
 
       {/* Form */}
