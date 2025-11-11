@@ -197,6 +197,32 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
       { y: yMidnightStart, text: '🕛 00:00 Local' },
       { y: yMidnightEnd, text: '🕛 24:00 Local' },
     ];
+        // --- sunrise/sunset labels from API ---
+    const sunLabels = (sunTimes || []).flatMap((s, i) => {
+      const sunriseUTC = new Date(s.sunriseUTC);
+      const sunsetUTC = new Date(s.sunsetUTC);
+      return [
+        { y: posFor(sunriseUTC), text: '🌅 Sunrise' },
+        { y: posFor(sunsetUTC), text: '🌇 Sunset' },
+      ];
+    });
+  
+    const eventLabels = [...midnightLabels, ...sunLabels]
+      .filter(ev => ev.y !== null && ev.y >= 0 && ev.y <= heightPx)
+      .map((ev, i) => (
+        <React.Fragment key={i}>
+          <div style={labelLine(ev.y)} />
+          <div
+            style={labelStyle(
+              ev.y,
+              side === 'left' ? 'left' : 'right'
+            )}
+          >
+            {ev.text}
+          </div>
+        </React.Fragment>
+      ));
+
   
     const labels = midnightLabels
       .filter(ev => ev.y !== null && ev.y >= 0 && ev.y <= heightPx)
@@ -238,6 +264,7 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
         }}>
           {dayBlocks}
           {labels}
+          {eventLabels}
         </div>
       </div>
     );
