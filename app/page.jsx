@@ -130,35 +130,40 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
 
 function CityColumn({ city, utcWindowStart, utcWindowEnd, colorDay, colorNight }) {
   const totalDuration =
-    (new Date(utcWindowEnd).getTime() - new Date(utcWindowStart).getTime()) / 60000; // minutes
+    (new Date(utcWindowEnd).getTime() - new Date(utcWindowStart).getTime()) / 60000;
 
-  // Convert a UTC timestamp into a percentage of the full UTC window
+  // Convert a UTC timestamp into % of the full UTC window
   const pctFromUTC = (dt) => {
     const t = new Date(dt).getTime();
     const start = new Date(utcWindowStart).getTime();
     return ((t - start) / (totalDuration * 60000)) * 100;
   };
 
-  // ✅ Reliable conversion: given "local midnight" in that timezone, return UTC equivalent
+  // ✅ Safe conversion: local midnight → UTC Date object
   const getLocalMidnightUTC = (dateStr, tz, offsetDays = 0) => {
-    // start with date 00:00 local
-    const localMidnight = new Date(`${dateStr}T00:00:00`);
-    // add offset days (for 24:00, offsetDays = 1)
-    localMidnight.setUTCDate(localMidnight.getUTCDate() + offsetDays);
+    // build a local midnight in that zone
+    const localDate = new Date(`${dateStr}T00:00:00`);
+    localDate.setUTCDate(localDate.getUTCDate() + offsetDays);
 
-    // get the UTC instant corresponding to local 00:00
-    const utcMillis =
-      Date.parse(
-        new Date(localMidnight).toLocaleString('en-US', { timeZone: tz })
-      ) - Date.parse(
-        new Date(localMidnight).toLocaleString('en-US', { timeZone: 'UTC' })
-      );
+    // use Intl to get numeric timezone offset at that moment
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      timeZoneName: 'shortOffset',
+    }).formatToParts(localDate);
+    const tzPart = parts.find((p) => p.type === 'timeZoneName')?.value || 'UTC';
 
-    return new Date(localMidnight.getTime() - utcMillis);
+    const match = tzPart.match(/([+-]\d{1,2})(?::?(\d{2}))?/);
+    const hours = match ? parseInt(match[1], 10) : 0;
+    const mins = match?.[2] ? parseInt(match[2], 10) : 0;
+    const offsetMinutes = hours * 60 + (hours >= 0 ? mins : -mins);
+
+    // subtract offset to get UTC midnight
+    const utcTime = new Date(localDate.getTime() - offsetMinutes * 60000);
+    return utcTime;
   };
 
   const tz = city.timezone;
-  const dateStr = city.sunTimes?.[1]?.date; // main day (the center of the 3 pulled)
+  const dateStr = city.sunTimes?.[1]?.date;
   const midnightStartUTC = getLocalMidnightUTC(dateStr, tz, 0);
   const midnightEndUTC = getLocalMidnightUTC(dateStr, tz, 1);
 
@@ -171,7 +176,7 @@ function CityColumn({ city, utcWindowStart, utcWindowEnd, colorDay, colorNight }
     <div className="flex flex-col items-center w-1/2 relative">
       <h3 className="font-semibold mb-2">{city.name}</h3>
       <div className="relative w-3 rounded-md overflow-hidden bg-gray-200" style={{ height: '500px' }}>
-        {/* Day/night background blocks */}
+        {/* Day/night background */}
         {city.sunTimes &&
           city.sunTimes.map((s, i) => {
             const sunrise = new Date(s.sunriseUTC);
@@ -211,7 +216,7 @@ function CityColumn({ city, utcWindowStart, utcWindowEnd, colorDay, colorNight }
             );
           })}
 
-        {/* Midnight markers */}
+        {/* Midnight lines */}
         {midnightLines.map((m, i) => (
           <div
             key={i}
@@ -231,6 +236,8 @@ function CityColumn({ city, utcWindowStart, utcWindowEnd, colorDay, colorNight }
     </div>
   );
 }
+
+
 
 
 export default function Page() {
