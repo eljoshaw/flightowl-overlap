@@ -297,8 +297,8 @@ function CityColumn({
 }
 
 export default function Page() {
-  const [from, setFrom] = useState('DXB');
-  const [to, setTo] = useState('DYD');
+  const [from, setFrom] = useState('JFK');
+  const [to, setTo] = useState('SYD');
   const [date, setDate] = useState('2025-11-12');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
