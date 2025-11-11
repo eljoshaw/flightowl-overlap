@@ -479,44 +479,61 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
             </div>
           </div>
 
+          {/* Center-anchored container (Option B layout) */}
           <div
             style={{
-              display: 'flex',
-              justifyContent: 'center',
-              gap: columnsGap,
-              alignItems: 'flex-start',
+              position: 'relative',
+              height: timeline.heightPx,
               marginTop: 20,
             }}
           >
-
-            <CityColumn
-              title={data.from.code}
-              tz={data.from.timezone}
-              sunTimes={data.from.sunTimes}
-              otherSunTimes={data.to.sunTimes}
-              otherCode={data.to.code}
-              midnights={data.from.midnights}
-              utcWindowStart={timeline.windowStart}
-              utcWindowEnd={timeline.windowEnd}
-              heightPx={timeline.heightPx}
-              pxPerMs={timeline.pxPerMs}
-              side="left"
-              columnWidth={columnWidth}
-            />
-            <CityColumn
-              title={data.to.code}
-              tz={data.to.timezone}
-              sunTimes={data.to.sunTimes}
-              otherSunTimes={data.from.sunTimes}
-              otherCode={data.from.code}
-              midnights={data.to.midnights}
-              utcWindowStart={timeline.windowStart}
-              utcWindowEnd={timeline.windowEnd}
-              heightPx={timeline.heightPx}
-              pxPerMs={timeline.pxPerMs}
-              side="right"
-              columnWidth={columnWidth}
-            />
+            {/* Left column: positioned just to the left of center */}
+            <div
+              style={{
+                position: 'absolute',
+                right: '50%',
+                transform: 'translateX(-8px)', // half of center gap
+              }}
+            >
+              <CityColumn
+                title={data.from.code}
+                tz={data.from.timezone}
+                sunTimes={data.from.sunTimes}
+                otherSunTimes={data.to.sunTimes}
+                otherCode={data.to.code}
+                midnights={data.from.midnights}
+                utcWindowStart={timeline.windowStart}
+                utcWindowEnd={timeline.windowEnd}
+                heightPx={timeline.heightPx}
+                pxPerMs={timeline.pxPerMs}
+                side="left"
+                columnWidth={columnWidth}
+              />
+            </div>
+          
+            {/* Right column: positioned just to the right of center */}
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                transform: 'translateX(8px)', // half of center gap
+              }}
+            >
+              <CityColumn
+                title={data.to.code}
+                tz={data.to.timezone}
+                sunTimes={data.to.sunTimes}
+                otherSunTimes={data.from.sunTimes}
+                otherCode={data.from.code}
+                midnights={data.to.midnights}
+                utcWindowStart={timeline.windowStart}
+                utcWindowEnd={timeline.windowEnd}
+                heightPx={timeline.heightPx}
+                pxPerMs={timeline.pxPerMs}
+                side="right"
+                columnWidth={columnWidth}
+              />
+            </div>
           </div>
 
           <div style={{ marginTop: 18 }}>
