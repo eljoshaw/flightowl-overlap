@@ -129,6 +129,15 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
  */
 
 function CityColumn({ city, utcWindowStart, utcWindowEnd, colorDay, colorNight }) {
+  // ⛔️ Guard: don’t render until data exists
+  if (!city || !city.timezone || !city.sunTimes || city.sunTimes.length === 0) {
+    return (
+      <div className="flex flex-col items-center w-1/2">
+        <div className="text-gray-500 text-sm mt-8">Loading city data…</div>
+      </div>
+    );
+  }
+
   const totalDuration =
     (new Date(utcWindowEnd).getTime() - new Date(utcWindowStart).getTime()) / 60000;
 
@@ -141,25 +150,30 @@ function CityColumn({ city, utcWindowStart, utcWindowEnd, colorDay, colorNight }
 
   // ✅ Safe conversion: local midnight → UTC Date object
   const getLocalMidnightUTC = (dateStr, tz, offsetDays = 0) => {
-    // build a local midnight in that zone
-    const localDate = new Date(`${dateStr}T00:00:00`);
-    localDate.setUTCDate(localDate.getUTCDate() + offsetDays);
+    try {
+      // build a local midnight in that zone
+      const localDate = new Date(`${dateStr}T00:00:00`);
+      localDate.setUTCDate(localDate.getUTCDate() + offsetDays);
 
-    // use Intl to get numeric timezone offset at that moment
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      timeZoneName: 'shortOffset',
-    }).formatToParts(localDate);
-    const tzPart = parts.find((p) => p.type === 'timeZoneName')?.value || 'UTC';
+      // use Intl to get numeric timezone offset at that moment
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        timeZoneName: 'shortOffset',
+      }).formatToParts(localDate);
+      const tzPart = parts.find((p) => p.type === 'timeZoneName')?.value || 'UTC';
 
-    const match = tzPart.match(/([+-]\d{1,2})(?::?(\d{2}))?/);
-    const hours = match ? parseInt(match[1], 10) : 0;
-    const mins = match?.[2] ? parseInt(match[2], 10) : 0;
-    const offsetMinutes = hours * 60 + (hours >= 0 ? mins : -mins);
+      const match = tzPart.match(/([+-]\d{1,2})(?::?(\d{2}))?/);
+      const hours = match ? parseInt(match[1], 10) : 0;
+      const mins = match?.[2] ? parseInt(match[2], 10) : 0;
+      const offsetMinutes = hours * 60 + (hours >= 0 ? mins : -mins);
 
-    // subtract offset to get UTC midnight
-    const utcTime = new Date(localDate.getTime() - offsetMinutes * 60000);
-    return utcTime;
+      // subtract offset to get UTC midnight
+      const utcTime = new Date(localDate.getTime() - offsetMinutes * 60000);
+      return utcTime;
+    } catch (err) {
+      console.error("Error in getLocalMidnightUTC:", err);
+      return new Date(`${dateStr}T00:00:00Z`);
+    }
   };
 
   const tz = city.timezone;
@@ -175,46 +189,48 @@ function CityColumn({ city, utcWindowStart, utcWindowEnd, colorDay, colorNight }
   return (
     <div className="flex flex-col items-center w-1/2 relative">
       <h3 className="font-semibold mb-2">{city.name}</h3>
-      <div className="relative w-3 rounded-md overflow-hidden bg-gray-200" style={{ height: '500px' }}>
+      <div
+        className="relative w-3 rounded-md overflow-hidden bg-gray-200"
+        style={{ height: '500px' }}
+      >
         {/* Day/night background */}
-        {city.sunTimes &&
-          city.sunTimes.map((s, i) => {
-            const sunrise = new Date(s.sunriseUTC);
-            const sunset = new Date(s.sunsetUTC);
-            const startPct = pctFromUTC(sunrise);
-            const endPct = pctFromUTC(sunset);
-            return (
-              <React.Fragment key={i}>
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: `${startPct}%`,
-                    height: `${endPct - startPct}%`,
-                    backgroundColor: colorDay,
-                    width: '100%',
-                  }}
-                ></div>
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    height: `${startPct}%`,
-                    backgroundColor: colorNight,
-                    width: '100%',
-                  }}
-                ></div>
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: `${endPct}%`,
-                    height: `${100 - endPct}%`,
-                    backgroundColor: colorNight,
-                    width: '100%',
-                  }}
-                ></div>
-              </React.Fragment>
-            );
-          })}
+        {city.sunTimes.map((s, i) => {
+          const sunrise = new Date(s.sunriseUTC);
+          const sunset = new Date(s.sunsetUTC);
+          const startPct = pctFromUTC(sunrise);
+          const endPct = pctFromUTC(sunset);
+          return (
+            <React.Fragment key={i}>
+              <div
+                style={{
+                  position: 'absolute',
+                  top: `${startPct}%`,
+                  height: `${endPct - startPct}%`,
+                  backgroundColor: colorDay,
+                  width: '100%',
+                }}
+              ></div>
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  height: `${startPct}%`,
+                  backgroundColor: colorNight,
+                  width: '100%',
+                }}
+              ></div>
+              <div
+                style={{
+                  position: 'absolute',
+                  top: `${endPct}%`,
+                  height: `${100 - endPct}%`,
+                  backgroundColor: colorNight,
+                  width: '100%',
+                }}
+              ></div>
+            </React.Fragment>
+          );
+        })}
 
         {/* Midnight lines */}
         {midnightLines.map((m, i) => (
@@ -236,6 +252,7 @@ function CityColumn({ city, utcWindowStart, utcWindowEnd, colorDay, colorNight }
     </div>
   );
 }
+
 
 
 
