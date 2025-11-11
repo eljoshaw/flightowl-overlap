@@ -498,7 +498,7 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
             }}
           >
           {/* Left column — anchored to centerline */}
-          <div style={{ transform: `translateX(${columnWidth / 2 - 17}px)` }}>   // left
+          <div style={{ transform: `translateX(${columnWidth / 2 - 17}px)` }}>
             <CityColumn
               title={data.from.code}
               tz={data.from.timezone}
