@@ -9,8 +9,14 @@ const COLORS = {
   rail: '#eaeaea',
 };
 
-const pxPerHourMobile = 32;
-const pxPerHourDesktop = 48;
+// Visual compression + fixed column geometry
+const pxPerHourMobile = 20;   // was 32
+const pxPerHourDesktop = 25;  // was 48
+
+const COLUMN_WIDTH_MOBILE = 90;     // px
+const COLUMN_WIDTH_DESKTOP = 120;   // px
+const COLUMNS_GAP_MOBILE = 40;      // px
+const COLUMNS_GAP_DESKTOP = 60;     // px
 
 // ---------- small time helpers ----------
 const addDays = (date, days) => new Date(date.getTime() + days * 86400000);
@@ -98,7 +104,9 @@ function CityColumn({
   heightPx,
   pxPerMs,
   side = 'left',
+  columnWidth,               // NEW
 }) {
+
   const daylight = useMemo(
     () => buildDaylightUTC(sunTimes, utcWindowStart, utcWindowEnd),
     [sunTimes, utcWindowStart, utcWindowEnd]
@@ -221,10 +229,11 @@ function CityColumn({
           borderRadius: 8,
           height: heightPx,
           overflow: 'visible',
-          width: '50%',
-          margin: side === 'left' ? '0 auto 0 0' : '0 0 0 auto',
+          width: columnWidth,   // fixed px width for a slimmer rail
+          margin: 0,            // bring the two rails closer; gap is handled by parent
         }}
       >
+
         {dayBlocks}
         {allEventLabels}
       </div>
@@ -240,13 +249,20 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
+  const [isMobile, setIsMobile] = useState(true);
   const [pxPerHour, setPxPerHour] = useState(pxPerHourMobile);
+  
   useEffect(() => {
-    const update = () => setPxPerHour(window.innerWidth < 768 ? pxPerHourMobile : pxPerHourDesktop);
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+  const update = () => {
+  const mobile = window.innerWidth < 768;
+  setIsMobile(mobile);
+  setPxPerHour(mobile ? pxPerHourMobile : pxPerHourDesktop);
+  };
+  update();
+  window.addEventListener('resize', update);
+  return () => window.removeEventListener('resize', update);
   }, []);
+
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -277,6 +293,9 @@ export default function Page() {
     const pxPerMs = heightPx / (windowEnd - windowStart);
     return { windowStart, windowEnd, heightPx, pxPerMs };
   }, [data, pxPerHour]);
+const columnWidth = isMobile ? COLUMN_WIDTH_MOBILE : COLUMN_WIDTH_DESKTOP;
+const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
+
 
   return (
     <div style={{ maxWidth: 980, margin: '0 auto', padding: '16px 16px 80px' }}>
@@ -408,11 +427,13 @@ export default function Page() {
           <div
             style={{
               display: 'flex',
-              gap: 16,
+              justifyContent: 'center',
+              gap: columnsGap,
               alignItems: 'flex-start',
-              marginTop: 12,
+              marginTop: 20,
             }}
           >
+
             <CityColumn
               title={data.from.code}
               tz={data.from.timezone}
@@ -425,6 +446,7 @@ export default function Page() {
               heightPx={timeline.heightPx}
               pxPerMs={timeline.pxPerMs}
               side="left"
+              columnWidth={columnWidth}
             />
             <CityColumn
               title={data.to.code}
@@ -438,6 +460,7 @@ export default function Page() {
               heightPx={timeline.heightPx}
               pxPerMs={timeline.pxPerMs}
               side="right"
+              columnWidth={columnWidth}
             />
           </div>
 
