@@ -66,7 +66,6 @@ function buildIntervalsForOneDay(sunriseMin, sunsetMin) {
   };
 }
 
-// ---------- continuous 3-day intervals ----------
 function buildContinuousIntervals(sunResultsYesterday, sunResultsToday, sunResultsTomorrow) {
   const days = [sunResultsYesterday, sunResultsToday, sunResultsTomorrow];
   const offsets = [-1440, 0, 1440];
@@ -170,37 +169,47 @@ async function getAirportByIATA(iata) {
   return data;
 }
 
-// ---------- helper to structure sunrise/sunset ----------
-function makeSunTimes(dateObjs, sunResults, tz) {
+// ---------- timezone translation helper ----------
+function translateToOtherTZ(utcISO, otherTZ) {
+  const d = new Date(utcISO);
+  return d.toLocaleString('sv-SE', {
+    timeZone: otherTZ,
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZoneName: 'shortOffset',
+  });
+}
+
+// ---------- sunrise/sunset builder with cross-translation ----------
+function makeSunTimes(dateObjs, sunResults, tz, otherTZ, otherCode) {
   const fmtUTC = (d, t) => `${d}T${t}:00Z`;
-  const makeLocal = (d, t) =>
+  const makeLocal = (d, t, zone) =>
     new Date(fmtUTC(d, t)).toLocaleString('sv-SE', {
-      timeZone: tz,
+      timeZone: zone,
       timeZoneName: 'shortOffset',
     });
 
   return [
-    {
-      date: dateObjs.dM1.toISOString().slice(0, 10),
-      sunriseUTC: fmtUTC(dateObjs.dM1.toISOString().slice(0, 10), sunResults.m1.sunriseUTC),
-      sunsetUTC: fmtUTC(dateObjs.dM1.toISOString().slice(0, 10), sunResults.m1.sunsetUTC),
-      sunriseLocal: makeLocal(dateObjs.dM1.toISOString().slice(0, 10), sunResults.m1.sunriseUTC),
-      sunsetLocal: makeLocal(dateObjs.dM1.toISOString().slice(0, 10), sunResults.m1.sunsetUTC),
-    },
-    {
-      date: dateObjs.d0.toISOString().slice(0, 10),
-      sunriseUTC: fmtUTC(dateObjs.d0.toISOString().slice(0, 10), sunResults._0.sunriseUTC),
-      sunsetUTC: fmtUTC(dateObjs.d0.toISOString().slice(0, 10), sunResults._0.sunsetUTC),
-      sunriseLocal: makeLocal(dateObjs.d0.toISOString().slice(0, 10), sunResults._0.sunriseUTC),
-      sunsetLocal: makeLocal(dateObjs.d0.toISOString().slice(0, 10), sunResults._0.sunsetUTC),
-    },
-    {
-      date: dateObjs.dP1.toISOString().slice(0, 10),
-      sunriseUTC: fmtUTC(dateObjs.dP1.toISOString().slice(0, 10), sunResults.p1.sunriseUTC),
-      sunsetUTC: fmtUTC(dateObjs.dP1.toISOString().slice(0, 10), sunResults.p1.sunsetUTC),
-      sunriseLocal: makeLocal(dateObjs.dP1.toISOString().slice(0, 10), sunResults.p1.sunriseUTC),
-      sunsetLocal: makeLocal(dateObjs.dP1.toISOString().slice(0, 10), sunResults.p1.sunsetUTC),
-    },
+    ...['m1', '_0', 'p1'].map((key, i) => {
+      const date = [dateObjs.dM1, dateObjs.d0, dateObjs.dP1][i];
+      const r = sunResults[key];
+      const sunriseUTC = fmtUTC(date.toISOString().slice(0, 10), r.sunriseUTC);
+      const sunsetUTC = fmtUTC(date.toISOString().slice(0, 10), r.sunsetUTC);
+      return {
+        date: date.toISOString().slice(0, 10),
+        sunriseUTC,
+        sunsetUTC,
+        sunriseLocal: makeLocal(date.toISOString().slice(0, 10), r.sunriseUTC, tz),
+        sunsetLocal: makeLocal(date.toISOString().slice(0, 10), r.sunsetUTC, tz),
+        // translated into the other airport's timezone
+        translatedForOther: {
+          sunriseLabel: `${otherCode} Sunrise`,
+          sunriseLocal: translateToOtherTZ(sunriseUTC, otherTZ),
+          sunsetLabel: `${otherCode} Sunset`,
+          sunsetLocal: translateToOtherTZ(sunsetUTC, otherTZ),
+        },
+      };
+    }),
   ];
 }
 
@@ -224,13 +233,11 @@ export async function GET(req) {
     const dM1 = new Date(d0.getTime() - 86400000);
     const dP1 = new Date(d0.getTime() + 86400000);
 
-    // --- Fetch airports once ---
     const [A, B] = await Promise.all([
       getAirportByIATA(fromCode),
       getAirportByIATA(toCode),
     ]);
 
-    // --- Dynamic UTC window calculation ---
     const fromOffset = getOffsetHoursForDate(A.timezone, dateStr);
     const toOffset = getOffsetHoursForDate(B.timezone, dateStr);
 
@@ -245,7 +252,6 @@ export async function GET(req) {
     const utcWindowStart = new Date(Math.min(fromDayStartUTC, toDayStartUTC));
     const utcWindowEnd = new Date(Math.max(fromDayEndUTC, toDayEndUTC));
 
-    // --- Sun times ---
     const [A_m1, A_0, A_p1] = [
       calculateSunTimes(A.latitude, A.longitude, dM1),
       calculateSunTimes(A.latitude, A.longitude, d0),
@@ -257,7 +263,6 @@ export async function GET(req) {
       calculateSunTimes(B.latitude, B.longitude, dP1),
     ];
 
-    // --- Overlaps ---
     const AIntervals = buildContinuousIntervals(A_m1, A_0, A_p1);
     const BIntervals = buildContinuousIntervals(B_m1, B_0, B_p1);
 
@@ -275,28 +280,22 @@ export async function GET(req) {
       A.timezone,
       B.timezone
     );
-    // --- Local midnight calculation helper ---
+
     function getLocalMidnightUTC(dateStr, tz, offsetDays = 0) {
       const localDate = new Date(`${dateStr}T00:00:00`);
       localDate.setUTCDate(localDate.getUTCDate() + offsetDays);
-    
-      // Extract offset for that timezone at that moment
       const parts = new Intl.DateTimeFormat('en-US', {
         timeZone: tz,
         timeZoneName: 'shortOffset',
       }).formatToParts(localDate);
-    
       const tzPart = parts.find(p => p.type === 'timeZoneName')?.value || 'UTC';
       const match = tzPart.match(/([+-]\d{1,2})(?::?(\d{2}))?/);
       const hours = match ? parseInt(match[1], 10) : 0;
       const mins = match?.[2] ? parseInt(match[2], 10) : 0;
       const offsetMinutes = hours * 60 + (hours >= 0 ? mins : -mins);
-    
-      // Subtract offset → get UTC time corresponding to 00:00 local
       return new Date(localDate.getTime() - offsetMinutes * 60000);
     }
-    
-    // --- Compute local midnights (UTC equivalents) for both airports ---
+
     const fromMidnights = {
       startUTC: getLocalMidnightUTC(dateStr, A.timezone, 0),
       endUTC: getLocalMidnightUTC(dateStr, A.timezone, 1),
@@ -306,7 +305,6 @@ export async function GET(req) {
       endUTC: getLocalMidnightUTC(dateStr, B.timezone, 1),
     };
 
-    // --- Response ---
     return NextResponse.json({
       meta: {
         requestedDateLocal: dateStr,
@@ -319,11 +317,7 @@ export async function GET(req) {
         name: A.name,
         country: A.country,
         timezone: A.timezone,
-        sunTimes: makeSunTimes(
-          { dM1, d0, dP1 },
-          { m1: A_m1, _0: A_0, p1: A_p1 },
-          A.timezone
-        ),
+        sunTimes: makeSunTimes({ dM1, d0, dP1 }, { m1: A_m1, _0: A_0, p1: A_p1 }, A.timezone, B.timezone, B.iata),
         midnights: {
           startUTC: fromMidnights.startUTC.toISOString(),
           endUTC: fromMidnights.endUTC.toISOString(),
@@ -334,11 +328,7 @@ export async function GET(req) {
         name: B.name,
         country: B.country,
         timezone: B.timezone,
-        sunTimes: makeSunTimes(
-          { dM1, d0, dP1 },
-          { m1: B_m1, _0: B_0, p1: B_p1 },
-          B.timezone
-        ),
+        sunTimes: makeSunTimes({ dM1, d0, dP1 }, { m1: B_m1, _0: B_0, p1: B_p1 }, B.timezone, A.timezone, A.iata),
         midnights: {
           startUTC: toMidnights.startUTC.toISOString(),
           endUTC: toMidnights.endUTC.toISOString(),
@@ -346,7 +336,6 @@ export async function GET(req) {
       },
       overlap: { daylight, nighttime },
     });
-
   } catch (e) {
     return NextResponse.json({ error: e.message || 'Unknown error' }, { status: 500 });
   }
