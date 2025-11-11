@@ -497,7 +497,7 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
               overflowX: 'hidden',            // prevent side scrollbars
             }}
           >
-
+            <div style={{ transform: 'translateX(12px)' }}>
               <CityColumn
                 title={data.from.code}
                 tz={data.from.timezone}
@@ -512,6 +512,9 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
                 side="left"
                 columnWidth={columnWidth}
               />
+            </div>
+            
+            <div style={{ transform: 'translateX(-12px)' }}>
               <CityColumn
                 title={data.to.code}
                 tz={data.to.timezone}
@@ -526,6 +529,8 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
                 side="right"
                 columnWidth={columnWidth}
               />
+            </div>
+
           </div>
 
             <div style={{ marginTop: 18, textAlign: 'center' }}>
