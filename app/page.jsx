@@ -483,6 +483,10 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
           {/* Centered pair using flex (Option A layout) */}
           <div
             style={{
+              position: 'relative',
+              width: '100vw',                 // full viewport width
+              left: '50%',
+              transform: 'translateX(-50%)',  // center the pair relative to the viewport
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'flex-start',
@@ -490,8 +494,10 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
               minHeight: timeline.heightPx + 25,
               marginTop: 20,
               paddingBottom: 25,
+              overflowX: 'hidden',            // prevent side scrollbars
             }}
           >
+
               <CityColumn
                 title={data.from.code}
                 tz={data.from.timezone}
