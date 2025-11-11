@@ -275,6 +275,36 @@ export async function GET(req) {
       A.timezone,
       B.timezone
     );
+    // --- Local midnight calculation helper ---
+    function getLocalMidnightUTC(dateStr, tz, offsetDays = 0) {
+      const localDate = new Date(`${dateStr}T00:00:00`);
+      localDate.setUTCDate(localDate.getUTCDate() + offsetDays);
+    
+      // Extract offset for that timezone at that moment
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        timeZoneName: 'shortOffset',
+      }).formatToParts(localDate);
+    
+      const tzPart = parts.find(p => p.type === 'timeZoneName')?.value || 'UTC';
+      const match = tzPart.match(/([+-]\d{1,2})(?::?(\d{2}))?/);
+      const hours = match ? parseInt(match[1], 10) : 0;
+      const mins = match?.[2] ? parseInt(match[2], 10) : 0;
+      const offsetMinutes = hours * 60 + (hours >= 0 ? mins : -mins);
+    
+      // Subtract offset → get UTC time corresponding to 00:00 local
+      return new Date(localDate.getTime() - offsetMinutes * 60000);
+    }
+    
+    // --- Compute local midnights (UTC equivalents) for both airports ---
+    const fromMidnights = {
+      startUTC: getLocalMidnightUTC(dateStr, A.timezone, 0),
+      endUTC: getLocalMidnightUTC(dateStr, A.timezone, 1),
+    };
+    const toMidnights = {
+      startUTC: getLocalMidnightUTC(dateStr, B.timezone, 0),
+      endUTC: getLocalMidnightUTC(dateStr, B.timezone, 1),
+    };
 
     // --- Response ---
     return NextResponse.json({
@@ -294,6 +324,10 @@ export async function GET(req) {
           { m1: A_m1, _0: A_0, p1: A_p1 },
           A.timezone
         ),
+        midnights: {
+          startUTC: fromMidnights.startUTC.toISOString(),
+          endUTC: fromMidnights.endUTC.toISOString(),
+        },
       },
       to: {
         code: B.iata,
@@ -305,9 +339,14 @@ export async function GET(req) {
           { m1: B_m1, _0: B_0, p1: B_p1 },
           B.timezone
         ),
+        midnights: {
+          startUTC: toMidnights.startUTC.toISOString(),
+          endUTC: toMidnights.endUTC.toISOString(),
+        },
       },
       overlap: { daylight, nighttime },
     });
+
   } catch (e) {
     return NextResponse.json({ error: e.message || 'Unknown error' }, { status: 500 });
   }
