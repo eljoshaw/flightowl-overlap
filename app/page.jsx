@@ -127,134 +127,166 @@ function buildNightUTC(daylightIntervals, windowStart, windowEnd) {
  * - overlay "day" blocks positioned absolutely by UTC time within window
  * - labels: city code, top/bottom local time range
  */
-function CityColumn({ city, utcWindowStart, utcWindowEnd, colorDay, colorNight, side }) {
-  const heightPx = 500;
-  const tz = city?.timezone;
-  const sunTimes = city?.sunTimes || [];
-
-  if (!tz || !utcWindowStart || !utcWindowEnd) return null;
-
-  const totalDuration =
-    (new Date(utcWindowEnd).getTime() - new Date(utcWindowStart).getTime()) / 60000;
-
-  const posFor = (dt) => {
-    const t = new Date(dt).getTime();
-    const start = new Date(utcWindowStart).getTime();
-    return ((t - start) / (totalDuration * 60000)) * heightPx;
-  };
-
-  // --- Day/Night background bands ---
-  const dayBlocks = sunTimes.map((s, i) => {
-    const sunrise = new Date(s.sunriseUTC);
-    const sunset = new Date(s.sunsetUTC);
-    const top = posFor(sunrise);
-    const height = posFor(sunset) - top;
-    return (
-      <div
-        key={`day-${i}`}
-        style={{
-          position: 'absolute',
-          top,
-          height,
-          width: '100%',
-          background: colorDay,
-        }}
-      ></div>
+  function CityColumn({ title, tz, sunTimes, midnights, utcWindowStart, utcWindowEnd, heightPx, pxPerMs, side = 'left' }) {
+    // --- build daylight intervals ---
+    const daylight = useMemo(
+      () => buildDaylightUTC(sunTimes, utcWindowStart, utcWindowEnd),
+      [sunTimes, utcWindowStart, utcWindowEnd]
     );
-  });
-
-  // --- Midnight markers (local 00:00 + 24:00) ---
-  const midnights = city.midnights || [];
-  const midnightLabels = midnights.map((m, i) => ({
-    y: posFor(m.utc),
-    text: i === 0 ? '🕛 00:00 Local' : '🕛 24:00 Local',
-  }));
-
-  // --- Sunrise/Sunset with local time ---
-  const sunLabels = (sunTimes || []).flatMap((s) => {
-    const fmtLocalTime = (isoStr) =>
-      new Date(isoStr).toLocaleTimeString('en-GB', {
-        timeZone: tz,
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    return [
-      { y: posFor(s.sunriseUTC), text: `🌅 Sunrise ${fmtLocalTime(s.sunriseUTC)}` },
-      { y: posFor(s.sunsetUTC), text: `🌇 Sunset ${fmtLocalTime(s.sunsetUTC)}` },
+  
+    // --- convert to vertical positions ---
+    const posFor = (dt) => (dt ? (dt.getTime() - utcWindowStart.getTime()) * pxPerMs : null);
+  
+    // --- pull local midnight start/end UTC from API ---
+    const midnightStartUTC = midnights?.startUTC ? new Date(midnights.startUTC) : null;
+    const midnightEndUTC = midnights?.endUTC ? new Date(midnights.endUTC) : null;
+    const yMidnightStart = posFor(midnightStartUTC);
+    const yMidnightEnd = posFor(midnightEndUTC);
+  
+    // --- draw daylight blocks ---
+    const dayBlocks = daylight.map((iv, idx) => {
+      const startMs = iv.start.getTime() - utcWindowStart.getTime();
+      const durMs = iv.end.getTime() - iv.start.getTime();
+      const top = startMs * pxPerMs;
+      const h = Math.max(1, durMs * pxPerMs);
+  
+      return (
+        <div
+          key={idx}
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top,
+            height: h,
+            background: COLORS.day,
+            border: `1px solid ${COLORS.rail}`,
+            borderRadius: 6,
+          }}
+          title={`${formatLocal(iv.start, tz)} → ${formatLocal(iv.end, tz)} (Day)`}
+        />
+      );
+    });
+  
+    // --- labels for midnights only (00:00 / 24:00 local) ---
+    const labelStyle = (y, align = 'left') => ({
+      position: 'absolute',
+      top: y,
+      [align]: '0.25rem',
+      textAlign: align === 'left' ? 'left' : 'right',
+      fontSize: 11,
+      color: COLORS.text,
+      transform: 'translateY(-50%)',
+      background: 'rgba(255,255,255,0.7)',
+      padding: '0 4px',
+      borderRadius: 3,
+      whiteSpace: 'nowrap',
+    });
+  
+    const labelLine = (y) => ({
+      position: 'absolute',
+      top: y,
+      left: 0,
+      right: 0,
+      height: 1,
+      background: '#aaa',
+      opacity: 0.4,
+    });
+  
+    const midnightLabels = [
+      { y: yMidnightStart, text: '🕛 00:00 Local' },
+      { y: yMidnightEnd, text: '🕛 24:00 Local' },
     ];
-  });
+        // --- sunrise/sunset labels from API ---
+        // --- sunrise/sunset labels with local time ---
+        const sunLabels = (sunTimes || []).flatMap((s, i) => {
+          const sunriseUTC = new Date(s.sunriseUTC);
+          const sunsetUTC = new Date(s.sunsetUTC);
+      
+          // Format local time label (just HH:MM)
+          const fmtLocalTime = (isoStr) => {
+            const d = new Date(isoStr);
+            return d
+              .toLocaleTimeString('en-GB', {
+                timeZone: tz,
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+              .replace(':00', ':00'); // ensures 2-digit format
+          };
+      
+          const sunriseLabel = `☀️ Sunrise ${fmtLocalTime(s.sunriseUTC)}`;
+          const sunsetLabel = `🌙 Sunset ${fmtLocalTime(s.sunsetUTC)}`;
+      
+          return [
+            { y: posFor(sunriseUTC), text: sunriseLabel },
+            { y: posFor(sunsetUTC), text: sunsetLabel },
+          ];
+        });
 
-  const eventLabels = [...midnightLabels, ...sunLabels].filter(
-    (ev) => ev.y >= 0 && ev.y <= heightPx
-  );
-
-  const COLORS = {
-    rail: '#999',
-    text: '#333',
-  };
-
-  // Helper line and label styles
-  const labelLine = (y) => ({
-    position: 'absolute',
-    top: y,
-    left: 0,
-    right: 0,
-    height: 1,
-    background: COLORS.rail,
-    opacity: 0.4,
-  });
-
-  const labelText = (y, text, alignRight) => ({
-    position: 'absolute',
-    top: y - 6,
-    [alignRight ? 'left' : 'right']: '0',
-    whiteSpace: 'nowrap',
-    fontSize: 11,
-    color: COLORS.text,
-    background: 'white',
-    padding: '2px 4px',
-    borderRadius: 3,
-    transform: alignRight ? 'translateX(100%)' : 'translateX(-100%)',
-  });
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: side === 'left' ? 'row' : 'row-reverse',
-        alignItems: 'flex-start',
-        gap: '8px',
-      }}
-    >
-      {/* Label strip (outside) */}
-      <div style={{ position: 'relative', width: 70, height: heightPx }}>
-        {eventLabels.map((ev, i) => (
-          <div key={i} style={labelText(ev.y, ev.text, side === 'left')}>
+  
+    const eventLabels = [...midnightLabels, ...sunLabels]
+      .filter(ev => ev.y !== null && ev.y >= 0 && ev.y <= heightPx)
+      .map((ev, i) => (
+        <React.Fragment key={i}>
+          <div style={labelLine(ev.y)} />
+          <div
+            style={labelStyle(
+              ev.y,
+              side === 'left' ? 'left' : 'right'
+            )}
+          >
             {ev.text}
           </div>
-        ))}
-      </div>
+        </React.Fragment>
+      ));
 
-      {/* Timeline column */}
-      <div
-        style={{
+  
+    const labels = midnightLabels
+      .filter(ev => ev.y !== null && ev.y >= 0 && ev.y <= heightPx)
+      .map((ev, i) => (
+        <React.Fragment key={i}>
+          <div style={labelLine(ev.y)} />
+          <div style={labelStyle(ev.y, side === 'left' ? 'left' : 'right')}>
+            {ev.text}
+          </div>
+        </React.Fragment>
+      ));
+  
+    // --- local labels for top/bottom ---
+    const localStartLabel = formatLocal(utcWindowStart, tz);
+    const localEndLabel = formatLocal(utcWindowEnd, tz);
+  
+    return (
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        {/* Header */}
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontWeight: 700, color: COLORS.text, fontSize: 16 }}>{title}</div>
+          <div style={{ fontSize: 12, color: '#555' }}>{tz}</div>
+          <div style={{ marginTop: 6, fontSize: 12, color: COLORS.text }}>
+            <div><strong>Start:</strong> {localStartLabel}</div>
+            <div><strong>End:</strong> {localEndLabel}</div>
+          </div>
+        </div>
+  
+        {/* Rail */}
+        <div style={{
           position: 'relative',
-          background: colorNight,
+          background: COLORS.night,
           border: `1px solid ${COLORS.rail}`,
           borderRadius: 8,
           height: heightPx,
-          width: 40,
           overflow: 'visible',
-        }}
-      >
-        {dayBlocks}
-        {eventLabels.map((ev, i) => (
-          <div key={i} style={labelLine(ev.y)} />
-        ))}
+          width: '50%', // narrower
+          margin: side === 'left' ? '0 auto 0 0' : '0 0 0 auto', // align left/right
+        }}>
+          {dayBlocks}
+          {labels}
+          {eventLabels}
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
 
 export default function Page() {
