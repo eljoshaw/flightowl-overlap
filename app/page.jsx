@@ -235,6 +235,60 @@ function CityColumn({
       >
 
         {dayBlocks}
+        {/* Hourly gridlines (UTC → localized per city) */}
+        {(() => {
+          const tickLines = [];
+          for (
+            let t = utcWindowStart.getTime();
+            t <= utcWindowEnd.getTime();
+            t += 60 * 60 * 1000 // 1-hour step
+          ) {
+            tickLines.push(new Date(t));
+          }
+        
+          return tickLines.map((tick, i) => {
+            const y = (tick.getTime() - utcWindowStart.getTime()) * pxPerMs;
+            const label = tick.toLocaleTimeString('en-GB', {
+              timeZone: tz,
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+        
+            return (
+              <React.Fragment key={`tick-${i}`}>
+                {/* Line */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: y,
+                    left: 0,
+                    right: 0,
+                    height: 1,
+                    background: 'rgba(0,0,0,0.15)',
+                    zIndex: 2, // sits above background but below text labels
+                  }}
+                />
+                {/* Label for full hours only */}
+                {label.endsWith(':00') && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: y,
+                      [side === 'left' ? 'right' : 'left']: '105%',
+                      fontSize: 10,
+                      color: COLORS.text,
+                      transform: 'translateY(-50%)',
+                      zIndex: 3,
+                    }}
+                  >
+                    {label}
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          });
+        })()}
+
         {allEventLabels}
       </div>
     </div>
