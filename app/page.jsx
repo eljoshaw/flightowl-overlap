@@ -480,23 +480,18 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
           </div>
 
           {/* Center-anchored container (Option B layout) */}
+          {/* Centered pair using flex (Option A layout) */}
           <div
             style={{
-              position: 'relative',
-              minHeight: timeline.heightPx + 40, // ensures the container is taller than the columns
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'flex-start',
+              gap: 16, // narrow gap between columns
+              minHeight: timeline.heightPx + 25,
               marginTop: 20,
-              paddingBottom: 40, // reserves clear space for legend
+              paddingBottom: 25,
             }}
           >
-
-            {/* Left column: positioned just to the left of center */}
-            <div
-              style={{
-                position: 'absolute',
-                right: '50%',
-                transform: `translateX(${columnWidth / 2 + 6}px)`  // left
-              }}
-            >
               <CityColumn
                 title={data.from.code}
                 tz={data.from.timezone}
@@ -511,16 +506,6 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
                 side="left"
                 columnWidth={columnWidth}
               />
-            </div>
-          
-            {/* Right column: positioned just to the right of center */}
-            <div
-              style={{
-                position: 'absolute',
-                left: '50%',
-                transform: `translateX(-${columnWidth / 2 + 6}px)` // right
-              }}
-            >
               <CityColumn
                 title={data.to.code}
                 tz={data.to.timezone}
