@@ -469,23 +469,38 @@ export default function Page() {
                     border: `1px solid ${COLORS.rail}`,
                   }}
                 />
-                <span style
-                    <span
-                  style={{
-                    width: 18,
-                    height: 18,
-                    background: COLORS.day,
-                    borderRadius: 4,
-                    border: `1px solid ${COLORS.rail}`,
-                  }}
-                />
-              <span style={{ fontSize: 13 }}>Daylight</span>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+<div style={{ marginTop: 18 }}>
+  <div style={{ fontWeight: 700, color: COLORS.text, marginBottom: 8 }}>Legend</div>
+  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span
+        style={{
+          width: 18,
+          height: 18,
+          background: COLORS.night,
+          borderRadius: 4,
+          border: `1px solid ${COLORS.rail}`,
+        }}
+      />
+      <span style={{ fontSize: 13 }}>Night</span>
     </div>
-  );
-}
 
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span
+        style={{
+          width: 18,
+          height: 18,
+          background: COLORS.day,
+          borderRadius: 4,
+          border: `1px solid ${COLORS.rail}`,
+        }}
+      />
+      <span style={{ fontSize: 13 }}>Daylight</span>
+    </div>
+  </div>
+</div>
+</>
+)}
+</div>
+);
+}
