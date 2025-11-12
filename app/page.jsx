@@ -405,7 +405,7 @@ const columnsGap = isMobile ? COLUMNS_GAP_MOBILE : COLUMNS_GAP_DESKTOP;
           />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: 12, color: '#444' }}>Date (YYYY-MM-DD)</label>
+          <label style={{ display: 'block', fontSize: 12, color: '#444' }}>Date (DD-MM-YYYY)</label>
           <input
             type="date"
             value={date}
